@@ -117,13 +117,15 @@ export default function CoursePage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Course {courseId}</h1>
         <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => setIsCreatingLecture(true)}
-            className="flex items-center bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-          >
-            <FiPlus className="mr-2" />
-            Create New Lecture
-          </button>
+          {(user?.role === 'teacher' || user?.role === 'ta') && (
+            <button 
+              onClick={() => setIsCreatingLecture(true)}
+              className="flex items-center bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+            >
+              <FiPlus className="mr-2" />
+              Create New Lecture
+            </button>
+          )}
           <button
             onClick={() => {
               if (window.confirm('Are you sure you want to logout?')) {
