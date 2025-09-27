@@ -257,28 +257,34 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
         )}
       </div>
 
-      {/* New question form */}
-      <form onSubmit={handleSubmit} className="mt-6 p-4 bg-white rounded-lg shadow-sm">
-        <div className="flex">
-          <input
-            type="text"
-            value={newQuestion}
-            onChange={(e) => {
-              setNewQuestion(e.target.value);
-              setError('');
-            }}
-            placeholder="Type your question and press Enter..."
-            className="flex-1 border border-gray-300 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <button
-            type="submit"
-            className="bg-blue-500 text-white px-6 py-2 rounded-r-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-          >
-            Ask
-          </button>
+      {/* New question form - only show for non-teachers */}
+      {user?.role !== 'teacher' ? (
+        <form onSubmit={handleSubmit} className="mt-6 p-4 bg-white rounded-lg shadow-sm">
+          <div className="flex">
+            <input
+              type="text"
+              value={newQuestion}
+              onChange={(e) => {
+                setNewQuestion(e.target.value);
+                setError('');
+              }}
+              placeholder="Type your question and press Enter..."
+              className="flex-1 border border-gray-300 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <button
+              type="submit"
+              className="bg-blue-500 text-white px-6 py-2 rounded-r-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Ask
+            </button>
+          </div>
+          {error && <div className="text-red-500 text-sm mt-2 ml-2">{error}</div>}
+        </form>
+      ) : (
+        <div className="mt-6 p-4 bg-blue-50 text-blue-700 rounded-lg text-center">
+          As a teacher, you can answer and manage student questions.
         </div>
-        {error && <div className="text-red-500 text-sm mt-2 ml-2">{error}</div>}
-      </form>
+      )}
 
       {/* Whiteboard area */}
       <div 
