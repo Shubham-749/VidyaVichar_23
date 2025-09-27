@@ -4,6 +4,7 @@ import { FiFilter, FiCheck, FiX, FiStar, FiMessageSquare } from 'react-icons/fi'
 export default function TeacherControls({ 
   questions = [], 
   onUpdateQuestion,
+  onQuestionAction,
   activeFilter,
   onFilterChange 
 }) {
@@ -17,9 +18,8 @@ export default function TeacherControls({
 
   const clearAll = () => {
     if (window.confirm('Are you sure you want to delete all questions?')) {
-      questions.forEach(q => {
-        onUpdateQuestion(q.id, { deleted: true });
-      });
+      // Use onQuestionAction with 'clear-all' action to clear all questions
+      onQuestionAction('clear-all');
     }
   };
 

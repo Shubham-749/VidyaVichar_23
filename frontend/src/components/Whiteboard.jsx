@@ -1,17 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiMessageSquare, FiFilter, FiX, FiCheck, FiStar, FiTrash2, FiMoreVertical } from 'react-icons/fi';
+import { FiMessageSquare, FiX, FiCheck, FiStar, FiTrash2, FiMoreVertical } from 'react-icons/fi';
 
 const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) => {
   const [newQuestion, setNewQuestion] = useState('');
-  const [filter, setFilter] = useState('all');
   const [error, setError] = useState('');
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, question: null });
   const [positions, setPositions] = useState({});
   const [isDragging, setIsDragging] = useState(false);
   const [dragItem, setDragItem] = useState(null);
   const boardRef = useRef(null);
-  const dragOffset = useRef({ x: 0, y: 0 });
-  const boardRect = useRef({ width: 0, height: 0, left: 0, top: 0 });
+  const boardRect = useRef({});
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -52,65 +50,93 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
       }
     };
 
+    const handleMouseMove = (e) => {
+      if (!isDragging || !dragItem) return;
+
+      const boardBounds = boardRect.current;
+      const minX = 5; // 5% from left
+      const maxX = 95; // 5% from right
+      const minY = 5; // 5% from top
+      const maxY = 95; // 5% from bottom
+      
+      // Calculate position as percentage of board
+      let x = ((e.clientX - boardBounds.left) / boardBounds.width) * 100;
+      let y = ((e.clientY - boardBounds.top) / boardBounds.height) * 100;
+      
+      // Constrain to boundaries
+      x = Math.max(minX, Math.min(maxX, x));
+      y = Math.max(minY, Math.min(maxY, y));
+
+      setPositions(prev => ({
+        ...prev,
+        [dragItem.id]: { x, y }
+      }));
+    };
+
     updateBoardRect();
     window.addEventListener('resize', updateBoardRect);
-    return () => window.removeEventListener('resize', updateBoardRect);
-  }, []);
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('resize', updateBoardRect);
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [isDragging, dragItem]);
 
   // Initialize positions for new questions
   useEffect(() => {
     const newPositions = {};
-    const boardWidth = boardRef.current?.clientWidth || 800;
-    const boardHeight = boardRef.current?.clientHeight || 600;
     
     questions.forEach(question => {
-      if (!positions[question.id]) {
+      if (!positions[question.id] && !question.position) {
+        // Position new notes within 20% to 80% of the whiteboard
         newPositions[question.id] = {
-          x: Math.random() * (boardWidth - 200), // 200 is the width of the sticky note
-          y: Math.random() * (boardHeight - 150) // 150 is an estimated height
+          x: 20 + Math.random() * 60, // 20% to 80%
+          y: 20 + Math.random() * 60  // 20% to 80%
         };
+      } else if (question.position) {
+        // Use saved position if it exists
+        newPositions[question.id] = question.position;
       }
     });
-    
+
     if (Object.keys(newPositions).length > 0) {
       setPositions(prev => ({
         ...prev,
         ...newPositions
       }));
     }
-  }, [questions]);
+  }, [questions.length]); // Only run when number of questions changes
 
-  const filteredQuestions = questions.filter(question => {
-    if (filter === 'answered') return question.answered;
-    if (filter === 'unanswered') return !question.answered;
-    if (filter === 'important') return question.important;
-    return true;
-  });
+  // Use questions directly since filtering is handled by the parent component
+  const filteredQuestions = questions;
 
-  const handleContextMenu = (e, question) => {
-    e.preventDefault();
-    setContextMenu({
-      visible: true,
-      x: e.clientX,
-      y: e.clientY,
-      question
+  // Check if user is a teacher/TA in a past lecture
+  const isTeacherInPastLecture = user.role === 'viewer' || user.role === 'teacher' || user.role === 'ta';
+  
+  // Handle mark all as answered
+  const handleMarkAllAnswered = () => {
+    filteredQuestions.forEach(q => {
+      if (!q.answered) {
+        onQuestionAction('toggleAnswered', q);
+      }
     });
   };
 
-  const closeContextMenu = () => {
-    setContextMenu({ ...contextMenu, visible: false });
-  };
-
-  const handleAction = (action, question) => {
-    onQuestionAction(action, question);
-    closeContextMenu();
+  // Handle clear all questions
+  const handleClearAll = () => {
+    if (window.confirm('Are you sure you want to clear all questions?')) {
+      filteredQuestions.forEach(q => {
+        onQuestionAction('delete', q);
+      });
+    }
   };
 
   const handleMouseDown = (e, question) => {
+    e.preventDefault();
     if (e.button !== 0) return; // Only left mouse button
     
     const target = e.currentTarget;
-    const boardRect = boardRef.current.getBoundingClientRect();
+    const boardBounds = boardRef.current.getBoundingClientRect();
     const rect = target.getBoundingClientRect();
     
     // Calculate the offset from the mouse to the top-left corner of the note
@@ -125,47 +151,33 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
     // Store initial positions
     const startX = e.clientX;
     const startY = e.clientY;
-    const startLeft = parseFloat(target.style.left) || 0;
-    const startTop = parseFloat(target.style.top) || 0;
+    
+    // Get current position from state or default to current position
+    const currentPos = positions[question.id] || { x: 0, y: 0 };
     
     const handleMouseMove = (e) => {
       // Calculate new position based on mouse movement
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       
-      // Calculate boundaries
-      const maxX = boardRect.width - target.offsetWidth;
-      const maxY = boardRect.height - target.offsetHeight;
+      // Calculate new position in percentages
+      const newX = (currentPos.x || 0) + (dx / boardBounds.width * 100);
+      const newY = (currentPos.y || 0) + (dy / boardBounds.height * 100);
       
-      // Calculate new position with boundaries
-      let newX = startLeft + dx;
-      let newY = startTop + dy;
-      
-      // Apply boundaries
-      newX = Math.max(0, Math.min(newX, maxX));
-      newY = Math.max(0, Math.min(newY, maxY));
-      
-      // Update position
-      target.style.left = `${newX}px`;
-      target.style.top = `${newY}px`;
+      // Update position in state
+      setPositions(prev => ({
+        ...prev,
+        [question.id]: {
+          x: Math.max(0, Math.min(newX, 95)), // Keep within 0-95% of container
+          y: Math.max(0, Math.min(newY, 95))
+        }
+      }));
       
       // Prevent text selection during drag
       e.preventDefault();
     };
     
-    const handleMouseUp = (e) => {
-      // Update the final position in state
-      const finalLeft = parseFloat(target.style.left);
-      const finalTop = parseFloat(target.style.top);
-      
-      setPositions(prev => ({
-        ...prev,
-        [question.id]: { 
-          x: isNaN(finalLeft) ? 0 : finalLeft, 
-          y: isNaN(finalTop) ? 0 : finalTop 
-        }
-      }));
-      
+    const handleMouseUp = () => {
       // Clean up styles
       target.style.transition = 'all 0.2s ease';
       target.style.boxShadow = '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)';
@@ -199,193 +211,145 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
   }, [contextMenu.visible]);
 
   return (
-    <div className="h-full flex flex-col" ref={boardRef}>
-      {/* Header with filter and new question */}
-      <div className="flex justify-between items-center mb-4 p-4 bg-white rounded-lg shadow-sm">
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-3 py-1 rounded-md ${filter === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setFilter('unanswered')}
-            className={`px-3 py-1 rounded-md ${filter === 'unanswered' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
-          >
-            Unanswered
-          </button>
-          <button
-            onClick={() => setFilter('answered')}
-            className={`px-3 py-1 rounded-md ${filter === 'answered' ? 'bg-blue-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
-          >
-            Answered
-          </button>
-          <button
-            onClick={() => setFilter('important')}
-            className={`px-3 py-1 rounded-md flex items-center ${filter === 'important' ? 'bg-yellow-500 text-white' : 'bg-gray-100 hover:bg-gray-200'}`}
-          >
-            <FiStar className="mr-1" /> Important
-          </button>
-        </div>
-        <div className="relative">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="appearance-none bg-white border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Questions</option>
-            <option value="unanswered">Unanswered</option>
-            <option value="answered">Answered</option>
-            <option value="important">Important</option>
-          </select>
-          <FiFilter className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
+    <div className="h-full w-full flex flex-col bg-white rounded-lg border-2 border-dashed border-gray-200 overflow-hidden" ref={boardRef}>
+      {/* Top Toolbar */}
+      <div className="flex-shrink-0 bg-white/80 backdrop-blur-sm p-2 border-b border-gray-200 flex justify-between items-center">
+        <div className="flex items-center space-x-2">
+          <h3 className="font-medium text-gray-700">Whiteboard</h3>
         </div>
         
-        {user.role === 'teacher' && (
-          <button
-            onClick={() => {
-              if (window.confirm('Clear all questions? This cannot be undone.')) {
-                onQuestionAction('clear-all');
-              }
-            }}
-            className="p-1.5 text-red-500 hover:bg-red-50 rounded-full"
-            title="Clear all questions"
-          >
-            <FiTrash2 size={18} />
-          </button>
+        {!isTeacherInPastLecture && (user.role === 'teacher' || user.role === 'ta') && (
+          <div className="flex space-x-2">
+            <button
+              onClick={handleMarkAllAnswered}
+              className="flex items-center px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              title="Mark all as answered"
+            >
+              <FiCheck className="mr-1.5" />
+              <span>Mark All Answered</span>
+            </button>
+            <button
+              onClick={handleClearAll}
+              className="flex items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              title="Clear all questions"
+            >
+              <FiTrash2 className="mr-1.5" />
+              <span>Clear All</span>
+            </button>
+          </div>
         )}
       </div>
-
-      {/* New question form - only show for non-teachers */}
-      {user?.role !== 'teacher' ? (
-        <form onSubmit={handleSubmit} className="mt-6 p-4 bg-white rounded-lg shadow-sm">
-          <div className="flex">
-            <input
-              type="text"
-              value={newQuestion}
-              onChange={(e) => {
-                setNewQuestion(e.target.value);
-                setError('');
-              }}
-              placeholder="Type your question and press Enter..."
-              className="flex-1 border border-gray-300 rounded-l-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              type="submit"
-              className="bg-blue-500 text-white px-6 py-2 rounded-r-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-            >
-              Ask
-            </button>
-          </div>
-          {error && <div className="text-red-500 text-sm mt-2 ml-2">{error}</div>}
-        </form>
-      ) : (
-        <div className="mt-6 p-4 bg-blue-50 text-blue-700 rounded-lg text-center">
-          As a teacher, you can answer and manage student questions.
-        </div>
-      )}
-
-      {/* Whiteboard area */}
-      <div 
-        ref={boardRef}
-        className="flex-1 relative overflow-hidden bg-gray-50 rounded-lg border-2 border-dashed border-gray-200"
-        onDragOver={(e) => e.preventDefault()}
-      >
-        {filteredQuestions.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center text-gray-400">
-            {filter === 'all' ? 'No questions yet. Be the first to ask!' : 'No matching questions.'}
-          </div>
-        ) : (
-          <div className="absolute inset-0">
-            {filteredQuestions.map((question) => {
-              const position = positions[question.id] || { x: 0, y: 0 };
-              return (
-                <div
-                  key={question.id}
-                  className={`absolute p-4 rounded-lg shadow-md w-64 select-none transition-all ${
-                    question.important ? 'bg-yellow-100 border-2 border-yellow-300' : 'bg-white border border-gray-200'
-                  } ${question.answered ? 'opacity-70' : ''} cursor-move`}
-                  style={{
-                    left: `${position.x}px`,
-                    top: `${position.y}px`,
-                    zIndex: 1,
-                    userSelect: 'none',
-                    touchAction: 'none',
-                    transform: isDragging && dragItem?.id === question.id ? 'scale(1.02)' : 'scale(1)'
-                  }}
-                  onMouseDown={(e) => handleMouseDown(e, question)}
-                  onContextMenu={(e) => handleContextMenu(e, question)}
+      
+      {/* Whiteboard Content */}
+      <div className="flex-1 min-h-0 flex flex-col p-4 relative" style={{ minHeight: '500px', overflow: 'hidden' }}>
+        {/* Question input form - only show for students in active lectures */}
+        {!isTeacherInPastLecture && onAddQuestion && (
+          <div className="mb-6">
+            <form onSubmit={handleSubmit} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  value={newQuestion}
+                  onChange={(e) => setNewQuestion(e.target.value)}
+                  placeholder="Type your question..."
+                  className="flex-1 p-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <p className={`text-sm ${question.answered ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                        {question.text}
-                      </p>
-                      <div className="text-xs text-gray-500 mt-1">
-                        {question.user}
+                  Ask
+                </button>
+              </div>
+              {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            </form>
+          </div>
+        )}
+
+        {/* Questions grid */}
+        <div className="absolute inset-0 p-4 overflow-hidden">
+          {filteredQuestions.length === 0 ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+              <FiMessageSquare className="w-12 h-12 mb-4 opacity-30" />
+              <p>No questions yet. Be the first to ask!</p>
+            </div>
+          ) : (
+            <div className="relative w-full h-full overflow-hidden" style={{ minHeight: '400px', position: 'relative' }}>
+              {filteredQuestions.map((q, index) => {
+                const position = positions[q.id] || {
+                  x: 20 + Math.random() * 60,
+                  y: 20 + Math.random() * 60
+                };
+                
+                return (
+                  <div
+                    key={q.id || index}
+                    className={`absolute p-4 rounded-lg shadow-md ${q.important ? 'bg-yellow-50 border-l-4 border-yellow-400' : 'bg-white'} ${q.answered ? 'opacity-75' : ''}`}
+                    style={{
+                      left: `${position.x}%`,
+                      top: `${position.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                      cursor: 'grab',
+                      zIndex: 1,
+                      width: '250px',
+                      transition: 'all 0.3s ease',
+                    }}
+                    onMouseDown={(e) => handleMouseDown(e, q)}
+                    onContextMenu={(e) => handleContextMenu(e, q)}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center">
+                        <span className="font-medium text-sm text-gray-900">{q.user || 'Anonymous'}</span>
+                        <span className="ml-2 text-xs text-gray-500">
+                          {new Date(q.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div className="flex space-x-1">
+                        {(user.role === 'teacher' || user.role === 'ta') && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onQuestionAction('toggleImportant', q);
+                            }}
+                            className={`p-1 rounded-full ${q.important ? 'text-yellow-500' : 'text-gray-400 hover:text-gray-600'}`}
+                            title={q.important ? 'Mark as not important' : 'Mark as important'}
+                          >
+                            <FiStar className={q.important ? 'fill-current' : ''} />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQuestionAction('toggleAnswered', q);
+                          }}
+                          className={`p-1 ${q.answered ? 'text-green-500' : 'text-gray-400 hover:text-gray-600'}`}
+                          title={q.answered ? 'Mark as unanswered' : 'Mark as answered'}
+                        >
+                          <FiCheck />
+                        </button>
+                        {(user.role === 'teacher' || (user.role === 'ta' && q.userId === user.id)) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm('Are you sure you want to delete this question?')) {
+                                onQuestionAction('delete', q);
+                              }
+                            }}
+                            className="p-1 text-red-500 hover:text-red-700"
+                            title="Delete question"
+                          >
+                            <FiX />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleContextMenu(e, question);
-                      }}
-                      className="text-gray-400 hover:text-gray-600 ml-2"
-                    >
-                      <FiMoreVertical size={16} />
-                    </button>
+                    <p className="text-gray-800">{q.text}</p>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Context Menu */}
-        {contextMenu.visible && contextMenu.question && (
-          <div 
-            className="fixed bg-white shadow-lg rounded-md py-1 z-50 w-40"
-            style={{
-              left: `${contextMenu.x}px`,
-              top: `${contextMenu.y}px`,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => handleAction('toggle-answered', contextMenu.question)}
-              className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center"
-            >
-              {contextMenu.question.answered ? (
-                <>
-                  <FiX className="mr-2 text-red-500" />
-                  Mark as Unanswered
-                </>
-              ) : (
-                <>
-                  <FiCheck className="mr-2 text-green-500" />
-                  Mark as Answered
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => handleAction('toggle-important', contextMenu.question)}
-              className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center"
-            >
-              <FiStar 
-                className={`mr-2 ${contextMenu.question.important ? 'text-yellow-500 fill-current' : 'text-gray-500'}`} 
-              />
-              {contextMenu.question.important ? 'Unmark Important' : 'Mark Important'}
-            </button>
-            <button
-              onClick={() => handleAction('delete', contextMenu.question)}
-              className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center"
-            >
-              <FiTrash2 className="mr-2" />
-              Delete
-            </button>
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

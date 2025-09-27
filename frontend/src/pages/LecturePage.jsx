@@ -44,10 +44,14 @@ export default function LecturePage() {
   
   // Initialize lecture data
   useEffect(() => {
-    console.log('State from navigation:', state);
-    console.log('Lecture ID from URL:', lectureId);
-    
     if (state?.lecture) {
+      // If this is a past lecture and user is not a teacher/TA, redirect back
+      if (state.lecture.isPast && !['teacher', 'ta'].includes(user?.role)) {
+        alert('This lecture has already ended.');
+        navigate(-1);
+        return;
+      }
+      
       console.log('Using lecture data from navigation state');
       setLecture(state.lecture);
       setLoading(false);
@@ -71,6 +75,11 @@ export default function LecturePage() {
 
   // Handle question actions
   const handleQuestionAction = useCallback((action, question) => {
+    // If this is a past lecture, don't allow any modifications
+    if (lecture?.isPast) {
+      alert('This is a past lecture. No modifications can be made.');
+      return;
+    }
     switch (action) {
       case 'add':
         const newQuestion = {
@@ -80,32 +89,53 @@ export default function LecturePage() {
         setQuestions(prev => [...prev, newQuestion]);
         break;
         
-      case 'toggle-answered':
-        setQuestions(prev => prev.map(q => 
-          q.id === question.id ? { ...q, answered: !q.answered } : q
-        ));
+      case 'toggleImportant':
+        setQuestions(prev => 
+          prev.map(q => 
+            q.id === question.id ? { ...q, important: !q.important } : q
+          ));
+        // Emit to WebSocket in a real app
+        if (socket) {
+          const updatedQuestion = { ...question, important: !question.important };
+          socket.emit('updateQuestion', updatedQuestion);
+        }
         break;
         
-      case 'toggle-important':
-        setQuestions(prev => prev.map(q => 
-          q.id === question.id ? { ...q, important: !q.important } : q
-        ));
+      case 'toggleAnswered':
+        setQuestions(prev => 
+          prev.map(q => 
+            q.id === question.id ? { ...q, answered: !q.answered } : q
+          ));
+        // Emit to WebSocket in a real app
+        if (socket) {
+          const updatedQuestion = { ...question, answered: !question.answered };
+          socket.emit('updateQuestion', updatedQuestion);
+        }
         break;
         
       case 'delete':
         setQuestions(prev => prev.filter(q => q.id !== question.id));
+        // Emit to WebSocket in a real app
+        if (socket) {
+          socket.emit('deleteQuestion', question.id);
+        }
         break;
         
       case 'clear-all':
         if (window.confirm('Are you sure you want to delete all questions?')) {
           setQuestions([]);
+          // Emit to WebSocket in a real app
+          if (socket) {
+            socket.emit('clearQuestions', lecture.id);
+          }
         }
         break;
         
       default:
+        console.warn(`Unknown action: ${action}`);
         break;
     }
-  }, []);
+  }, [socket, lecture]);
 
   // Fetch questions and set up socket listeners
   useEffect(() => {
@@ -185,22 +215,24 @@ export default function LecturePage() {
 
   // Handle missing lecture data
   if (!lecture) {
-    console.log('No lecture data available');
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <p className="text-xl font-semibold">Lecture not found</p>
-          <p className="text-gray-600 mt-2">The requested lecture could not be loaded.</p>
-          <button 
+          <h2 className="text-2xl font-semibold mb-2">Lecture Not Found</h2>
+          <p className="text-gray-600 mb-4">The requested lecture could not be loaded.</p>
+          <button
             onClick={() => navigate(-1)}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Go Back to Course
+            Go Back
           </button>
         </div>
       </div>
     );
   }
+  
+  // Check if this is a past lecture
+  const isPastLecture = lecture.isPast || new Date(lecture.endTime) < new Date();
 
   // Leave lecture and go back
   const leaveLecture = () => {
@@ -208,11 +240,11 @@ export default function LecturePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <div className="flex-1 flex flex-col h-[calc(100vh-4rem)]">
+    <div className="h-screen bg-gray-100 flex flex-col">
+      <div className="flex-1 flex flex-col p-4 overflow-hidden">
         {/* Whiteboard section */}
-        <div className="flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-white">
+        <div className="flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden bg-white shadow flex flex-col">
+          <div className="p-4 border-b border-gray-200 bg-white flex-shrink-0">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-semibold">{lecture?.name || 'Whiteboard'}</h2>
               <div className="flex items-center space-x-4">
@@ -229,24 +261,43 @@ export default function LecturePage() {
             </div>
           </div>
           
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-              <Whiteboard 
-                user={user}
-                questions={filteredQuestions}
-                onQuestionAction={(action, question) => handleQuestionAction(action, question)}
-                onAddQuestion={(question) => handleQuestionAction('add', question)}
-              />
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1 bg-gray-50 relative" style={{ minHeight: '600px' }}>
+              <div className={isPastLecture ? 'opacity-75 absolute inset-0' : 'absolute inset-0'}>
+                {isPastLecture && (
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-yellow-700">
+                          You are viewing a past lecture. This is a read-only view.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <Whiteboard 
+                  user={isPastLecture ? { ...user, role: 'viewer' } : user}
+                  questions={filteredQuestions}
+                  onQuestionAction={(action, question) => handleQuestionAction(action, question)}
+                  onAddQuestion={isPastLecture ? undefined : (question) => handleQuestionAction('add', question)}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Teacher Controls (only visible to teachers) */}
-        {user?.role === 'teacher' && (
+        {/* Teacher Controls (only visible to teachers and not in past lectures) */}
+        {(user?.role === 'teacher' || user?.role === 'ta') && !isPastLecture && (
           <div className="mt-6">
             <TeacherControls 
               questions={questions}
               onUpdateQuestion={handleUpdateQuestion}
+              onQuestionAction={handleQuestionAction}
               activeFilter={activeFilter}
               onFilterChange={setActiveFilter}
             />
