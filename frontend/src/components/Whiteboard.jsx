@@ -23,7 +23,8 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
       return;
     }
     
-    onAddQuestion({
+    // Use onQuestionAction with 'add' action
+    onQuestionAction('add', {
       text: newQuestion,
       user: user.name || 'Anonymous',
       userId: user.id,
@@ -241,11 +242,11 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
       </div>
       
       {/* Whiteboard Content */}
-      <div className="flex-1 min-h-0 flex flex-col p-4 relative" style={{ minHeight: '500px', overflow: 'hidden' }}>
-        {/* Question input form - only show for students in active lectures */}
-        {!isTeacherInPastLecture && onAddQuestion && (
-          <div className="mb-6">
-            <form onSubmit={handleSubmit} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      <div className="flex-1 min-h-0 flex flex-col relative" style={{ minHeight: '500px', overflow: 'hidden' }}>
+        {/* Question input form - show for all users in active lectures */}
+        {onQuestionAction && (
+          <div className="p-4 z-10 relative bg-white border-b border-gray-200">
+            <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
               <div className="flex items-center">
                 <input
                   type="text"
@@ -267,7 +268,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
         )}
 
         {/* Questions grid */}
-        <div className="absolute inset-0 p-4 overflow-hidden">
+        <div className="flex-1 p-4 overflow-auto" style={{ marginTop: '0' }}>
           {filteredQuestions.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
               <FiMessageSquare className="w-12 h-12 mb-4 opacity-30" />
