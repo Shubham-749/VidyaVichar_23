@@ -293,6 +293,9 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                       cursor: 'grab',
                       zIndex: 1,
                       width: '250px',
+                      minHeight: '100px',
+                      maxHeight: '300px',
+                      overflow: 'hidden',
                       transition: 'all 0.3s ease',
                     }}
                     onMouseDown={(e) => handleMouseDown(e, q)}
@@ -346,7 +349,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                         )}
                       </div>
                     </div>
-                    <p className="text-gray-800">{q.text}</p>
+                    <p className="text-gray-800 break-words overflow-y-auto" style={{ maxHeight: '200px' }}>{q.text}</p>
                   </div>
                 );
               })}
