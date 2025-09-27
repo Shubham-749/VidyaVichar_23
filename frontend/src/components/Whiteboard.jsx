@@ -318,16 +318,18 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                             <FiStar className={q.important ? 'fill-current' : ''} />
                           </button>
                         )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onQuestionAction('toggleAnswered', q);
-                          }}
-                          className={`p-1 ${q.answered ? 'text-green-500' : 'text-gray-400 hover:text-gray-600'}`}
-                          title={q.answered ? 'Mark as unanswered' : 'Mark as answered'}
-                        >
-                          <FiCheck />
-                        </button>
+                        {(user.role === 'teacher' || user.role === 'ta') && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onQuestionAction('toggleAnswered', q);
+                            }}
+                            className={`p-1 ${q.answered ? 'text-green-500' : 'text-gray-400 hover:text-gray-600'}`}
+                            title={q.answered ? 'Mark as unanswered' : 'Mark as answered'}
+                          >
+                            <FiCheck />
+                          </button>
+                        )}
                         {(user.role === 'teacher' || (user.role === 'ta' && q.userId === user.id)) && (
                           <button
                             onClick={(e) => {
