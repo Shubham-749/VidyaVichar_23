@@ -45,18 +45,21 @@ export default function LecturePage() {
   // Initialize lecture data
   useEffect(() => {
     if (state?.lecture) {
+      console.log('Using lecture data from navigation state:', state.lecture);
       // If this is a past lecture and user is not a teacher/TA, redirect back
-      if (state.lecture.isPast && !['teacher', 'ta'].includes(user?.role)) {
+      if (state.lecture.status === 'completed' && !['teacher', 'ta'].includes(user?.role)) {
         alert('This lecture has already ended.');
         navigate(-1);
         return;
       }
       
-      console.log('Using lecture data from navigation state');
-      setLecture(state.lecture);
+      setLecture({
+        ...state.lecture,
+        isPast: state.lecture.status === 'completed'
+      });
       setLoading(false);
     } else {
-      console.log('Generating mock lecture data');
+      console.log('No lecture data in navigation state, loading from ID:', lectureId);
       // Fallback mock data if no lecture is provided in state
       const mockLecture = {
         id: lectureId,
@@ -65,9 +68,10 @@ export default function LecturePage() {
         startTime: new Date().toISOString(),
         endTime: new Date(Date.now() + 3600000).toISOString(),
         courseId: '1',
-        courseName: 'Course 1'
+        courseName: 'Course 1',
+        isPast: false
       };
-      console.log('Mock lecture data:', mockLecture);
+      console.log('Using mock lecture data:', mockLecture);
       setLecture(mockLecture);
       setLoading(false);
     }

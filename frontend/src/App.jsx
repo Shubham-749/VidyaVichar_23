@@ -21,7 +21,7 @@ export default function App() {
             <Route path="/courses/:id" element={<CoursePage />} />
           </Route>
           
-          <Route element={<ProtectedRoute allowedRoles={['teacher', 'student']} />}>
+          <Route element={<ProtectedRoute allowedRoles={['teacher', 'student', 'ta']} />}>
             <Route path="/lectures/:id" element={<LecturePage />} />
           </Route>
           

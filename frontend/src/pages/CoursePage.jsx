@@ -94,14 +94,28 @@ export default function CoursePage() {
   };
 
   const handleLectureClick = (lecture) => {
-    if (lecture.status === 'live' || user?.role === 'teacher' || user?.role === 'ta') {
+    // Allow access to TAs and teachers regardless of lecture status
+    if (user?.role === 'teacher' || user?.role === 'ta') {
       navigate(`/lectures/${lecture.id}`, { 
         state: { 
           lecture: {
             ...lecture,
             courseId: courseId,
             courseName: `Course ${courseId}`,
-            isPast: lecture.status === 'completed' // Add flag to indicate if this is a past lecture
+            isPast: lecture.status === 'completed'
+          }
+        } 
+      });
+    } 
+    // For students, only allow access to live lectures
+    else if (lecture.status === 'live') {
+      navigate(`/lectures/${lecture.id}`, { 
+        state: { 
+          lecture: {
+            ...lecture,
+            courseId: courseId,
+            courseName: `Course ${courseId}`,
+            isPast: false
           }
         } 
       });
