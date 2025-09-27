@@ -243,8 +243,8 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
       
       {/* Whiteboard Content */}
       <div className="flex-1 min-h-0 flex flex-col relative" style={{ minHeight: '500px', overflow: 'hidden' }}>
-        {/* Question input form - show for all users in active lectures */}
-        {onQuestionAction && (
+        {/* Question input form - show only for students */}
+        {onQuestionAction && user?.role === 'student' && (
           <div className="p-4 z-10 relative bg-white border-b border-gray-200">
             <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
               <div className="flex items-center">
