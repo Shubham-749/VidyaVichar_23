@@ -13,22 +13,22 @@ export default function LecturePage() {
   const { user } = useAuth();
   const { socket, isConnected } = useSocket();
   const navigate = useNavigate();
-  
+
   const [lecture, setLecture] = useState(state?.lecture || null);
   const [questions, setQuestions] = useState([]);
   const [participants, setParticipants] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
-  
+
   // Handle updating a question
   const handleUpdateQuestion = useCallback((questionId, updates) => {
-    setQuestions(prevQuestions => 
-      prevQuestions.map(q => 
+    setQuestions(prevQuestions =>
+      prevQuestions.map(q =>
         q.id === questionId ? { ...q, ...updates } : q
       )
     );
-    
+
     // Emit update to socket if connected
     if (socket && isConnected) {
       socket.emit('updateQuestion', { questionId, updates });
@@ -36,7 +36,7 @@ export default function LecturePage() {
       console.warn('Socket not connected, cannot emit update');
     }
   }, [socket]);
-  
+
   // Calculate filtered questions
   const filteredQuestions = questions.filter(q => {
     if (activeFilter === 'all') return true;
@@ -44,7 +44,7 @@ export default function LecturePage() {
     if (activeFilter === 'important') return q.important;
     return true;
   });
-  
+
   // Initialize lecture data
   useEffect(() => {
     if (state?.lecture) {
@@ -54,7 +54,7 @@ export default function LecturePage() {
         navigate(-1);
         return;
       }
-      
+
       setLecture({
         ...state.lecture,
         isPast: state.lecture.status === 'completed'
@@ -62,11 +62,11 @@ export default function LecturePage() {
       setLoading(false);
     } else {
       if (!lectureId) {
-          setError('Invalid lecture ID');
+        setError('Invalid lecture ID');
         setLoading(false);
         return;
       }
-      
+
       // Fallback mock data if no lecture is provided in state
       const mockLecture = {
         _id: lectureId,
@@ -95,15 +95,15 @@ export default function LecturePage() {
           alert('Cannot add question: Lecture data is not available. Please refresh the page.');
           return;
         }
-        
+
         // Use socket instead of API call
         if (socket && isConnected) {
           console.log('Emitting askQuestion via socket:', { lectureId: lecture._id, content: question.text });
-          socket.emit('askQuestion', { 
-            lectureId: lecture._id, 
-            content: question.text 
+          socket.emit('askQuestion', {
+            lectureId: lecture._id,
+            content: question.text
           });
-          
+
           // Optimistically add the question to local state
           const newQuestion = {
             ...question,
@@ -118,24 +118,24 @@ export default function LecturePage() {
         } else {
           console.warn('Socket not connected, cannot ask question');
           alert('Not connected to the server. Please check your connection and try again.');
-          
+
           // Fallback to local state if socket is not connected
           const newQuestion = {
             ...question,
-              id: Date.now(),
-              answered: false,
-              important: false
-            };
-            setQuestions(prev => [...prev, newQuestion]);
-          }
+            id: Date.now(),
+            answered: false,
+            important: false
+          };
+          setQuestions(prev => [...prev, newQuestion]);
+        }
         break;
-        
+
       case 'toggleImportant':
         if (socket && isConnected) {
           socket.emit('toggleImportant', { questionId: question.id, isImportant: !question.important });
           // Optimistically update UI
-          setQuestions(prev => 
-            prev.map(q => 
+          setQuestions(prev =>
+            prev.map(q =>
               q.id === question.id ? { ...q, important: !q.important } : q
             )
           );
@@ -143,16 +143,16 @@ export default function LecturePage() {
           console.warn('Socket not connected, cannot toggle important');
         }
         break;
-        
+
       case 'toggleAnswered':
         if (socket && isConnected) {
-          socket.emit('updateQuestionStatus', { 
-            questionId: question.id, 
-            status: !question.answered ? 'answered' : 'unanswered' 
+          socket.emit('updateQuestionStatus', {
+            questionId: question.id,
+            status: !question.answered ? 'answered' : 'unanswered'
           });
           // Optimistically update UI
-          setQuestions(prev => 
-            prev.map(q => 
+          setQuestions(prev =>
+            prev.map(q =>
               q.id === question.id ? { ...q, answered: !q.answered } : q
             )
           );
@@ -160,7 +160,7 @@ export default function LecturePage() {
           console.warn('Socket not connected, cannot toggle answered');
         }
         break;
-        
+
       case 'delete':
         if (socket && isConnected) {
           socket.emit('deleteQuestion', question.id);
@@ -170,7 +170,7 @@ export default function LecturePage() {
           console.warn('Socket not connected, cannot delete question');
         }
         break;
-        
+
       case 'clear-all':
         if (window.confirm('Are you sure you want to delete all questions?')) {
           if (socket && isConnected) {
@@ -182,7 +182,7 @@ export default function LecturePage() {
           }
         }
         break;
-        
+
       default:
         break;
     }
@@ -193,7 +193,7 @@ export default function LecturePage() {
     if (!lecture || !lecture._id) {
       return;
     }
-    
+
     const fetchQuestions = async () => {
       try {
         // Fetch questions from backend API
@@ -211,14 +211,14 @@ export default function LecturePage() {
         setQuestions(mappedQuestions);
         setParticipants(Math.floor(Math.random() * 50) + 1);
         setLoading(false);
-        
+
         // Set up WebSocket listeners in a real app
         if (socket && isConnected) {
           console.log('Setting up socket listeners for lecture:', lecture._id);
-          
+
           // Join lecture room
           socket.emit('joinLecture', { lectureId: lecture._id, userId: user?.id });
-          
+
           socket.on('newQuestion', (newQuestion) => {
             console.log('Received new question:', newQuestion);
             // Map backend question fields to frontend expected fields
@@ -233,7 +233,7 @@ export default function LecturePage() {
             };
             setQuestions(prev => [...prev, mappedQuestion]);
           });
-          
+
           socket.on('questionUpdated', (updatedQuestion) => {
             console.log('Received question update:', updatedQuestion);
             // Map backend question fields to frontend expected fields
@@ -246,11 +246,11 @@ export default function LecturePage() {
               answered: updatedQuestion.status === 'answered',
               important: updatedQuestion.isImportant
             };
-            setQuestions(prev => 
+            setQuestions(prev =>
               prev.map(q => q.id === mappedQuestion.id ? mappedQuestion : q)
             );
           });
-          
+
           socket.on('participantCount', (count) => {
             console.log('Participant count updated:', count);
             setParticipants(count);
@@ -278,7 +278,7 @@ export default function LecturePage() {
       }
     };
   }, [lecture, socket, isConnected, user?.id]);
-  
+
   // Handle loading state
   if (loading) {
     return (
@@ -308,7 +308,7 @@ export default function LecturePage() {
       </div>
     );
   }
-  
+
   // Check if this is a past lecture
   const isPastLecture = lecture.isPast || new Date(lecture.endTime) < new Date();
 
@@ -338,7 +338,7 @@ export default function LecturePage() {
               </div>
             </div>
           </div>
-          
+
           <div className="flex-1 flex flex-col">
             <div className="flex-1 bg-gray-50 relative" style={{ minHeight: '600px' }}>
               <div className={isPastLecture ? 'opacity-75 absolute inset-0' : 'absolute inset-0'}>
@@ -358,7 +358,7 @@ export default function LecturePage() {
                     </div>
                   </div>
                 )}
-                <Whiteboard 
+                <Whiteboard
                   user={isPastLecture ? { ...user, role: 'viewer' } : user}
                   questions={filteredQuestions}
                   onQuestionAction={(action, question) => handleQuestionAction(action, question)}
@@ -372,7 +372,7 @@ export default function LecturePage() {
         {/* Teacher Controls (only visible to teachers and not in past lectures) */}
         {(user?.role === 'instructor' || user?.role === 'ta') && !isPastLecture && (
           <div className="mt-6">
-            <TeacherControls 
+            <TeacherControls
               questions={questions}
               onUpdateQuestion={handleUpdateQuestion}
               onQuestionAction={handleQuestionAction}

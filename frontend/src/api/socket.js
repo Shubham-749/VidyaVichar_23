@@ -17,7 +17,6 @@ export const connectSocket = (token, lectureId) => {
   if (lectureId) {
     socket.emit('joinLecture', { lectureId });
   }
-
   return socket;
 };
 
