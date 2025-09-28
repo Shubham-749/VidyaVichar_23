@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { FiMessageSquare, FiX, FiCheck, FiStar, FiMoreVertical } from 'react-icons/fi';
 
-const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) => {
+const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion, lectureName = 'Whiteboard' }) => {
   const [newQuestion, setNewQuestion] = useState('');
   const [error, setError] = useState('');
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, question: null });
@@ -231,7 +231,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
       {/* Top Toolbar */}
       <div className="flex-shrink-0 bg-white/80 backdrop-blur-sm p-2 border-b border-gray-200 flex justify-between items-center">
         <div className="flex items-center space-x-2">
-          <h3 className="font-medium text-gray-700">Whiteboard</h3>
+          <h3 className="font-medium text-gray-700">{lectureName}</h3>
         </div>
         
         {!isTeacherInPastLecture && (user.role === 'instructor' || user.role === 'ta') && (

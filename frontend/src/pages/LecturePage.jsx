@@ -332,53 +332,65 @@ export default function LecturePage() {
 
   return (
     <div className="h-screen bg-gray-100 flex flex-col">
-      <div className="flex-1 flex flex-col p-4 overflow-hidden">
-        {/* Whiteboard section */}
-        <div className="flex-1 flex flex-col border border-gray-200 rounded-lg overflow-hidden bg-white shadow flex flex-col">
-          <div className="p-4 border-b border-gray-200 bg-white flex-shrink-0">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold">{lecture?.name || 'Whiteboard'}</h2>
-              <div className="flex items-center space-x-4">
-                <div className="text-sm text-gray-500 flex items-center">
-                  <FiUsers className="mr-1" /> {participants} participants
-                </div>
-                <button
-                  onClick={leaveLecture}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center"
-                >
-                  <FiArrowLeft className="mr-2" /> Leave
-                </button>
-              </div>
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              <FiArrowLeft className="mr-2" />
+              Back
+            </button>
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900">
+                {lecture?.title || 'Loading...'}
+              </h1>
+              <p className="text-sm text-gray-500">
+                {lecture?.courseName || 'Course'} • {participants} participant{participants !== 1 ? 's' : ''}
+              </p>
             </div>
           </div>
-
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 bg-gray-50 relative" style={{ minHeight: '600px' }}>
-              <div className={isPastLecture ? 'opacity-75 absolute inset-0' : 'absolute inset-0'}>
-                {isPastLecture && (
-                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm text-yellow-700">
-                          You are viewing a past lecture. This is a read-only view.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <Whiteboard
-                  user={isPastLecture ? { ...user, role: 'viewer' } : user}
-                  questions={filteredQuestions}
-                  onQuestionAction={(action, question) => handleQuestionAction(action, question)}
-                  onAddQuestion={isPastLecture ? undefined : (question) => handleQuestionAction('add', question)}
-                />
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
+                {user?.name?.charAt(0).toUpperCase() || 'U'}
               </div>
+              <span>{user?.name || 'User'}</span>
             </div>
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <FiUsers className="text-gray-400" />
+              <span>{participants}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 flex flex-col">
+        <div className="flex-1 bg-gray-50 relative" style={{ minHeight: '600px' }}>
+          <div className={isPastLecture ? 'opacity-75 absolute inset-0' : 'absolute inset-0'}>
+            {isPastLecture && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-yellow-700">
+                      You are viewing a past lecture. This is a read-only view.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            <Whiteboard
+              user={isPastLecture ? { ...user, role: 'viewer' } : user}
+              questions={filteredQuestions}
+              lectureName={lecture?.title || 'Lecture'}
+              onQuestionAction={(action, question) => handleQuestionAction(action, question)}
+              onAddQuestion={isPastLecture ? undefined : (question) => handleQuestionAction('add', question)}
+            />
           </div>
         </div>
 
