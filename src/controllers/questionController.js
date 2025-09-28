@@ -7,11 +7,10 @@ export const postQuestion = async (req, res) => {
     const { lectureId } = req.params;
     const { content } = req.body;
     const lecture = await Lecture.findById(lectureId);
-    if (
-      !lecture ||
-      lecture.startTime > Date.now() ||
-      lecture.endTime < Date.now()
-    )
+    const start = new Date(lecture.startTime);
+    const end = new Date(lecture.endTime);
+    const current = new Date();
+    if (!lecture || start > current || end < current)
       return res.status(400).json({ message: "Lecture not ongoing" });
     const course = await Course.findById(lecture.course);
     if (!course) return res.status(404).json({ message: "Course not found" });
