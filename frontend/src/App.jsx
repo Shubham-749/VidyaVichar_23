@@ -13,15 +13,15 @@ export default function App() {
           <Route path="/" element={<LoginPage />} />
           
           {/* Protected Routes */}
-          <Route element={<ProtectedRoute allowedRoles={['teacher', 'student', 'ta']} />}>
+          <Route element={<ProtectedRoute allowedRoles={['instructor', 'student', 'ta']} />}>
             <Route path="/dashboard" element={<DashboardPage />} />
           </Route>
           
-          <Route element={<ProtectedRoute allowedRoles={['teacher', 'student', 'ta']} />}>
+          <Route element={<ProtectedRoute allowedRoles={['instructor', 'student', 'ta']} />}>
             <Route path="/courses/:id" element={<CoursePage />} />
           </Route>
           
-          <Route element={<ProtectedRoute allowedRoles={['teacher', 'student', 'ta']} />}>
+          <Route element={<ProtectedRoute allowedRoles={['instructor', 'student', 'ta']} />}>
             <Route path="/lectures/:id" element={<LecturePage />} />
           </Route>
           

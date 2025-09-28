@@ -112,7 +112,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
   const filteredQuestions = questions;
 
   // Check if user is a teacher/TA in a past lecture
-  const isTeacherInPastLecture = user.role === 'viewer' || user.role === 'teacher' || user.role === 'ta';
+  const isTeacherInPastLecture = user.role === 'viewer' || user.role === 'instructor' || user.role === 'ta';
   
   // Handle mark all as answered
   const handleMarkAllAnswered = () => {
@@ -219,7 +219,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
           <h3 className="font-medium text-gray-700">Whiteboard</h3>
         </div>
         
-        {!isTeacherInPastLecture && (user.role === 'teacher' || user.role === 'ta') && (
+        {!isTeacherInPastLecture && (user.role === 'instructor' || user.role === 'ta') && (
           <div className="flex space-x-2">
             <button
               onClick={handleMarkAllAnswered}
@@ -309,7 +309,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                         </span>
                       </div>
                       <div className="flex space-x-1">
-                        {(user.role === 'teacher' || user.role === 'ta') && (
+                        {(user.role === 'instructor' || user.role === 'ta') && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -321,7 +321,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                             <FiStar className={q.important ? 'fill-current' : ''} />
                           </button>
                         )}
-                        {(user.role === 'teacher' || user.role === 'ta') && (
+                        {(user.role === 'instructor' || user.role === 'ta') && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -333,7 +333,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                             <FiCheck />
                           </button>
                         )}
-                        {(user.role === 'teacher' || (user.role === 'ta' && q.userId === user.id)) && (
+                        {(user.role === 'instructor' || (user.role === 'ta' && q.userId === user.id)) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

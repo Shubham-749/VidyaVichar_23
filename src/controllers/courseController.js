@@ -28,6 +28,17 @@ export const listCourses = async (req, res) => {
   res.json(courses);
 };
 
+export const getCourseById = async (req, res) => {
+  const { courseId } = req.params;
+
+  const course = await Course.findById(courseId);
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
+
+  res.json(course);
+};
+
 export const enrollUser = async (req, res) => {
   const { userId, courseId } = req.body;
 

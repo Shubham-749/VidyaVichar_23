@@ -9,7 +9,7 @@ let ioInstance = null;
 export function initSocket(server) {
   const io = new Server(server, { cors: { origin: "*" } });
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
+    const token = socket.handshake.auth?.token || socket.handshake.query.token;
 
     const payload = verifyJwt(token);
 
@@ -21,7 +21,6 @@ export function initSocket(server) {
   io.on("connection", (socket) => {
     socket.on("joinLecture", async (data) => {
       try {
-        data = JSON.parse(data);
         const lectureId = data.lectureId;
         const lecture = await Lecture.findById(lectureId);
         const start = new Date(lecture.startTime);
@@ -38,17 +37,25 @@ export function initSocket(server) {
           return socket.emit("error", "Not enrolled in course");
         socket.join(`lecture:${lectureId}`);
         const questions = await Question.find({ lecture: lectureId });
-        socket.emit("lectureData", { lecture, questions });
+        
+        // Get participant count
+        const participants = io.sockets.adapter.rooms.get(`lecture:${lectureId}`)?.size || 0;
+        
+        socket.emit("lectureData", { lecture, questions, participants });
+        io.to(`lecture:${lectureId}`).emit("participantCount", participants);
       } catch (e) {
         console.error(e);
       }
     });
 
     socket.on("leaveLecture", async (data) => {
-      data = JSON.parse(data);
-      const lectureId = data.lectureId;
       try {
+        const lectureId = data.lectureId;
         socket.leave(`lecture:${lectureId}`);
+        
+        // Update participant count
+        const participants = io.sockets.adapter.rooms.get(`lecture:${lectureId}`)?.size || 0;
+        io.to(`lecture:${lectureId}`).emit("participantCount", participants);
       } catch (e) {
         console.error(e);
       }
@@ -56,7 +63,6 @@ export function initSocket(server) {
 
     socket.on("askQuestion", async (data) => {
       try {
-        data = JSON.parse(data);
         const lectureId = data.lectureId;
         const content = data.content;
         const lecture = await Lecture.findById(lectureId);
@@ -82,7 +88,6 @@ export function initSocket(server) {
 
     socket.on("toggleImportant", async (data) => {
       try {
-        data = JSON.parse(data);
         const questionId = data.questionId;
         const isImportant = data.isImportant;
         const q = await Question.findById(questionId);
@@ -103,7 +108,6 @@ export function initSocket(server) {
 
     socket.on("updateQuestionStatus", async (data) => {
       try {
-        data = JSON.parse(data);
         const questionId = data.questionId;
         const status = data.status;
         const q = await Question.findById(questionId);
@@ -117,6 +121,65 @@ export function initSocket(server) {
         q.status = status;
         await q.save();
         io.to(`lecture:${lecture._id}`).emit("questionUpdated", q);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+
+    socket.on("updateQuestion", async (data) => {
+      try {
+        const { questionId, updates } = data;
+        const q = await Question.findById(questionId);
+        if (!q) return socket.emit("error", "Question not found");
+        const lecture = await Lecture.findById(q.lecture);
+        if (!lecture) return socket.emit("error", "Lecture not found");
+        const course = await Course.findById(lecture.course);
+        if (!course) return socket.emit("error", "Course not found");
+        if (course.instructorId.toString() !== socket.user.id)
+          return socket.emit("error", "Not instructor");
+        
+        // Apply updates
+        if (updates.status) q.status = updates.status;
+        if (updates.isImportant !== undefined) q.isImportant = updates.isImportant;
+        
+        await q.save();
+        io.to(`lecture:${lecture._id}`).emit("questionUpdated", q);
+      } catch (e) {
+        console.error(e);
+      }
+    });
+
+    socket.on("deleteQuestion", async (data) => {
+      try {
+        const { questionId } = data;
+        const q = await Question.findById(questionId);
+        if (!q) return socket.emit("error", "Question not found");
+        const lecture = await Lecture.findById(q.lecture);
+        if (!lecture) return socket.emit("error", "Lecture not found");
+        const course = await Course.findById(lecture.course);
+        if (!course) return socket.emit("error", "Course not found");
+        if (course.instructorId.toString() !== socket.user.id)
+          return socket.emit("error", "Not instructor");
+        
+        await Question.findByIdAndDelete(questionId);
+        io.to(`lecture:${lecture._id}`).emit("questionDeleted", { questionId });
+      } catch (e) {
+        console.error(e);
+      }
+    });
+
+    socket.on("clearQuestions", async (data) => {
+      try {
+        const { lectureId } = data;
+        const lecture = await Lecture.findById(lectureId);
+        if (!lecture) return socket.emit("error", "Lecture not found");
+        const course = await Course.findById(lecture.course);
+        if (!course) return socket.emit("error", "Course not found");
+        if (course.instructorId.toString() !== socket.user.id)
+          return socket.emit("error", "Not instructor");
+        
+        await Question.deleteMany({ lecture: lectureId });
+        io.to(`lecture:${lectureId}`).emit("questionsCleared", { lectureId });
       } catch (e) {
         console.error(e);
       }

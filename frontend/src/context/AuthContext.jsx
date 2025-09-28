@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authApi } from '../api/auth';
 
 export const AuthContext = createContext();
 
@@ -8,46 +9,83 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Load user from localStorage on initial load
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (error) {
-        console.error('Failed to parse user data', error);
-        localStorage.removeItem('user');
+  // Check for existing session on initial load
+  const checkAuth = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
       }
+
+      const response = await authApi.getMe();
+      if (response.user) {
+        setUser({
+          id: response.user.id,
+          name: response.user.name,
+          email: response.user.email,
+          role: response.user.role
+        });
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      // Clear invalid token
+      localStorage.removeItem('token');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  const login = useCallback((userData) => {
-    const userWithRole = {
-      ...userData,
-      role: userData.role || 'student' // Default to student role if not specified
-    };
-    setUser(userWithRole);
-    localStorage.setItem('user', JSON.stringify(userWithRole));
-    // Redirect to dashboard after successful login
-    window.location.href = '/dashboard';
-    return userWithRole;
+  // Check authentication status on mount
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  const login = useCallback(async (userData) => {
+    try {
+      const response = await authApi.login(userData);
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        
+        const userInfo = {
+          id: response.user.id,
+          name: response.user.name,
+          email: response.user.email,
+          role: response.user.role || 'student'
+        };
+        
+        setUser(userInfo);
+        localStorage.setItem('user', JSON.stringify(userInfo));
+        return userInfo;
+      }
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(() => {
-    setUser(null);
+    // Call logout API if needed
+    authApi.logout().catch(console.error);
+    
+    // Clear local storage and state
+    localStorage.removeItem('token');
     localStorage.removeItem('user');
+    setUser(null);
+    
+    // Redirect to login page
     navigate('/');
   }, [navigate]);
 
   const hasRole = useCallback((requiredRole) => {
-    if (!user) return false;
+    if (!user || !user.role) return false;
     return user.role === requiredRole;
   }, [user]);
 
   const value = {
     user,
     loading,
+    isAuthenticated: !!user,
     login,
     logout,
     hasRole

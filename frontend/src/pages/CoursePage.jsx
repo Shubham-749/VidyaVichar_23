@@ -1,40 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FiPlus, FiX, FiLogOut } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
+import { lecturesApi } from '../api/lectures';
+import { coursesApi } from '../api/courses';
+import { useLecture } from '../hooks/useLecture';
 import LectureCard from '../components/LectureCard';
 
 export default function CoursePage() {
   const { id: courseId } = useParams();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-
-  const [lectures, setLectures] = useState([
-    { 
-      id: 'lecture1', 
-      name: 'Lecture 1: Introduction to Course', 
-      status: 'live',
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 3600000), // 1 hour from now
-      description: 'Introduction to the course content and objectives'
-    },
-    { 
-      id: 'lecture2', 
-      name: 'Lecture 2: Advanced Topics', 
-      status: 'completed',
-      startTime: new Date(Date.now() - 86400000), // yesterday
-      endTime: new Date(Date.now() - 82800000), // yesterday + 1 hour
-      description: 'Deep dive into advanced concepts'
-    },
-    { 
-      id: 'lecture3', 
-      name: 'Lecture 3: Recap Session', 
-      status: 'upcoming',
-      startTime: new Date(Date.now() + 86400000), // tomorrow
-      endTime: new Date(Date.now() + 90000000), // tomorrow + 1 hour
-      description: 'Review of previous lectures and Q&A session'
-    },
-  ]);
+  const { lectures, loading, error, refetch: refetchLectures } = useLecture(courseId);
+  const [course, setCourse] = useState(null);
+  const [courseLoading, setCourseLoading] = useState(true);
   
   const [isCreatingLecture, setIsCreatingLecture] = useState(false);
   // Helper function to format date for datetime-local input
@@ -51,87 +30,96 @@ export default function CoursePage() {
     endTime: formatForInput(new Date(Date.now() + 3600000)) // Default to 1 hour from now
   });
 
-  const handleCreateLecture = () => {
+  // Fetch course data
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        const courseData = await coursesApi.getCourseById(courseId);
+        setCourse(courseData);
+      } catch (err) {
+        console.error('Failed to fetch course:', err);
+      } finally {
+        setCourseLoading(false);
+      }
+    };
+
+    if (courseId) {
+      fetchCourse();
+    }
+  }, [courseId]);
+
+  const handleCreateLecture = async () => {
     if (!newLecture.name.trim()) {
       alert('Please enter a lecture name');
       return;
     }
-    
-    const newLectureId = `lecture${Date.now()}`; // Use timestamp for unique ID
+
     const startTime = new Date(newLecture.startTime);
     const endTime = new Date(newLecture.endTime);
-    
-    // Validate end time is after start time
+
     if (endTime <= startTime) {
       alert('End time must be after start time');
       return;
     }
 
-    const lectureToAdd = {
-      id: newLectureId,
-      name: newLecture.name,
-      description: newLecture.description,
-      status: 'upcoming',
-      startTime: startTime,
-      endTime: endTime
-    };
-    
-    // In a real app, you would save this to your backend here
-    // await api.createLecture(courseId, lectureToAdd);
-    
-    // Update local state
-    setLectures([...lectures, lectureToAdd]);
-    
-    // Reset form
-    setNewLecture({
-      name: '',
-      description: '',
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 3600000)
-    });
-    
-    setIsCreatingLecture(false);
+    try {
+      const lectureData = {
+        title: newLecture.name,
+        description: newLecture.description,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+      };
+
+      await lecturesApi.createLecture(courseId, lectureData);
+      
+      // Refetch lectures to update the list
+      refetchLectures();
+
+      // Reset form and close modal
+      setNewLecture({
+        name: '',
+        description: '',
+        startTime: formatForInput(new Date()),
+        endTime: formatForInput(new Date(Date.now() + 3600000))
+      });
+      setIsCreatingLecture(false);
+    } catch (err) {
+      console.error('Failed to create lecture:', err);
+      alert('Failed to create lecture. Please try again.');
+    }
   };
 
   const handleLectureClick = (lecture) => {
-    // Allow access to TAs and teachers regardless of lecture status
-    if (user?.role === 'teacher' || user?.role === 'ta') {
-      navigate(`/lectures/${lecture.id}`, { 
-        state: { 
-          lecture: {
-            ...lecture,
-            courseId: courseId,
-            courseName: `Course ${courseId}`,
-            isPast: lecture.status === 'completed'
-          }
-        } 
-      });
+    if (user?.role === 'instructor' || user?.role === 'ta') {
+      navigate(`/lectures/${lecture._id}`, { state: { lecture } });
     } 
-    // For students, only allow access to live lectures
     else if (lecture.status === 'live') {
-      navigate(`/lectures/${lecture.id}`, { 
-        state: { 
-          lecture: {
-            ...lecture,
-            courseId: courseId,
-            courseName: `Course ${courseId}`,
-            isPast: false
-          }
-        } 
-      });
+      navigate(`/lectures/${lecture._id}`, { state: { lecture } });
     } else if (lecture.status === 'upcoming') {
-      alert(`Lecture "${lecture.name}" has not started yet.`);
+      alert(`Lecture "${lecture.title}" has not started yet.`);
     } else {
-      alert(`Lecture "${lecture.name}" has already ended.`);
+      alert(`Lecture "${lecture.title}" has already ended.`);
     }
   };
+
+  // Handle loading states
+  if (courseLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-xl font-semibold">Loading course...</p>
+          <p className="text-gray-500 mt-2">Please wait while we load the course data.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Course {courseId}</h1>
+        <h1 className="text-2xl font-bold">{course?.title || 'Course'}</h1>
         <div className="flex items-center space-x-4">
-          {(user?.role === 'teacher' || user?.role === 'ta') && (
+          {(user?.role === 'instructor' || user?.role === 'ta') && (
             <button 
               onClick={() => setIsCreatingLecture(true)}
               className="flex items-center bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
@@ -150,7 +138,7 @@ export default function CoursePage() {
             title="Logout"
           >
             <FiLogOut className="mr-1" />
-            {user?.name ? user.name.split(' ')[0] : 'Logout'}
+            Logout
           </button>
         </div>
       </div>
@@ -256,19 +244,25 @@ export default function CoursePage() {
         </div>
       )}
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {lectures.map((lecture) => (
-          <div 
-            key={lecture.id}
-            onClick={() => handleLectureClick(lecture)}
-            className="cursor-pointer"
-          >
-            <LectureCard 
-              lecture={lecture}
-            />
+      {loading && <div className="text-center">Loading lectures...</div>}
+      {error && <div className="text-center text-red-500">Failed to load lectures.</div>}
+      {!loading && !error && (
+        lectures.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {lectures.map((lecture) => (
+              <div 
+                key={lecture._id}
+                onClick={() => handleLectureClick(lecture)}
+                className="cursor-pointer"
+              >
+                <LectureCard lecture={lecture} />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        ) : (
+          <p>No lectures have been created for this course yet.</p>
+        )
+      )}
     </div>
   );
 }

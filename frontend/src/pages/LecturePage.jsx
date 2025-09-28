@@ -5,12 +5,13 @@ import { useSocket } from '../context/SocketContext';
 import { FiArrowLeft, FiUsers, FiVideo, FiMic, FiPhoneOff } from 'react-icons/fi';
 import Whiteboard from '../components/Whiteboard';
 import TeacherControls from '../components/TeacherControls';
+import { questionsApi } from '../api/questions';
 
 export default function LecturePage() {
   const { id: lectureId } = useParams();
   const { state } = useLocation();
   const { user } = useAuth();
-  const socket = useSocket();
+  const { socket, isConnected } = useSocket();
   const navigate = useNavigate();
   
   const [lecture, setLecture] = useState(state?.lecture || null);
@@ -29,8 +30,10 @@ export default function LecturePage() {
     );
     
     // Emit update to socket if connected
-    if (socket) {
+    if (socket && isConnected) {
       socket.emit('updateQuestion', { questionId, updates });
+    } else {
+      console.warn('Socket not connected, cannot emit update');
     }
   }, [socket]);
   
@@ -45,9 +48,8 @@ export default function LecturePage() {
   // Initialize lecture data
   useEffect(() => {
     if (state?.lecture) {
-      console.log('Using lecture data from navigation state:', state.lecture);
       // If this is a past lecture and user is not a teacher/TA, redirect back
-      if (state.lecture.status === 'completed' && !['teacher', 'ta'].includes(user?.role)) {
+      if (state.lecture.status === 'completed' && !['instructor', 'ta'].includes(user?.role)) {
         alert('This lecture has already ended.');
         navigate(-1);
         return;
@@ -59,23 +61,26 @@ export default function LecturePage() {
       });
       setLoading(false);
     } else {
-      console.log('No lecture data in navigation state, loading from ID:', lectureId);
+      if (!lectureId) {
+          setError('Invalid lecture ID');
+        setLoading(false);
+        return;
+      }
+      
       // Fallback mock data if no lecture is provided in state
       const mockLecture = {
-        id: lectureId,
-        name: `Lecture ${lectureId ? lectureId.split('lecture')[1] || '1' : '1'}`,
-        status: 'live',
+        _id: lectureId,
+        name: `Lecture ${lectureId.split('lecture')[1] || '1'}`,
         startTime: new Date().toISOString(),
         endTime: new Date(Date.now() + 3600000).toISOString(),
         courseId: '1',
         courseName: 'Course 1',
         isPast: false
-      };
-      console.log('Using mock lecture data:', mockLecture);
+      }
       setLecture(mockLecture);
       setLoading(false);
     }
-  }, [state, lectureId]);
+  }, [state, lectureId, user, navigate]);
 
   // Handle question actions
   const handleQuestionAction = useCallback((action, question) => {
@@ -86,105 +91,172 @@ export default function LecturePage() {
     }
     switch (action) {
       case 'add':
-        const newQuestion = {
-          ...question,
-          id: Date.now()
-        };
-        setQuestions(prev => [...prev, newQuestion]);
+        if (!lecture || !lecture._id) {
+          alert('Cannot add question: Lecture data is not available. Please refresh the page.');
+          return;
+        }
+        
+        // Use socket instead of API call
+        if (socket && isConnected) {
+          console.log('Emitting askQuestion via socket:', { lectureId: lecture._id, content: question.text });
+          socket.emit('askQuestion', { 
+            lectureId: lecture._id, 
+            content: question.text 
+          });
+          
+          // Optimistically add the question to local state
+          const newQuestion = {
+            ...question,
+            id: `temp-${Date.now()}`, // Temporary ID until server responds
+            answered: false,
+            important: false,
+            user: user?.name || 'Anonymous',
+            userId: user?.id,
+            timestamp: new Date().toISOString()
+          };
+          setQuestions(prev => [...prev, newQuestion]);
+        } else {
+          console.warn('Socket not connected, cannot ask question');
+          alert('Not connected to the server. Please check your connection and try again.');
+          
+          // Fallback to local state if socket is not connected
+          const newQuestion = {
+            ...question,
+              id: Date.now(),
+              answered: false,
+              important: false
+            };
+            setQuestions(prev => [...prev, newQuestion]);
+          }
         break;
         
       case 'toggleImportant':
-        setQuestions(prev => 
-          prev.map(q => 
-            q.id === question.id ? { ...q, important: !q.important } : q
-          ));
-        // Emit to WebSocket in a real app
-        if (socket) {
-          const updatedQuestion = { ...question, important: !question.important };
-          socket.emit('updateQuestion', updatedQuestion);
+        if (socket && isConnected) {
+          socket.emit('toggleImportant', { questionId: question.id, isImportant: !question.important });
+          // Optimistically update UI
+          setQuestions(prev => 
+            prev.map(q => 
+              q.id === question.id ? { ...q, important: !q.important } : q
+            )
+          );
+        } else {
+          console.warn('Socket not connected, cannot toggle important');
         }
         break;
         
       case 'toggleAnswered':
-        setQuestions(prev => 
-          prev.map(q => 
-            q.id === question.id ? { ...q, answered: !q.answered } : q
-          ));
-        // Emit to WebSocket in a real app
-        if (socket) {
-          const updatedQuestion = { ...question, answered: !question.answered };
-          socket.emit('updateQuestion', updatedQuestion);
+        if (socket && isConnected) {
+          socket.emit('updateQuestionStatus', { 
+            questionId: question.id, 
+            status: !question.answered ? 'answered' : 'unanswered' 
+          });
+          // Optimistically update UI
+          setQuestions(prev => 
+            prev.map(q => 
+              q.id === question.id ? { ...q, answered: !q.answered } : q
+            )
+          );
+        } else {
+          console.warn('Socket not connected, cannot toggle answered');
         }
         break;
         
       case 'delete':
-        setQuestions(prev => prev.filter(q => q.id !== question.id));
-        // Emit to WebSocket in a real app
-        if (socket) {
+        if (socket && isConnected) {
           socket.emit('deleteQuestion', question.id);
+          // Optimistically update UI
+          setQuestions(prev => prev.filter(q => q.id !== question.id));
+        } else {
+          console.warn('Socket not connected, cannot delete question');
         }
         break;
         
       case 'clear-all':
         if (window.confirm('Are you sure you want to delete all questions?')) {
-          setQuestions([]);
-          // Emit to WebSocket in a real app
-          if (socket) {
-            socket.emit('clearQuestions', lecture.id);
+          if (socket && isConnected) {
+            socket.emit('clearQuestions', lecture._id);
+            // Optimistically update UI
+            setQuestions([]);
+          } else {
+            console.warn('Socket not connected, cannot clear questions');
           }
         }
         break;
         
       default:
-        console.warn(`Unknown action: ${action}`);
         break;
     }
-  }, [socket, lecture]);
+  }, [socket, isConnected, lecture, user]);
 
   // Fetch questions and set up socket listeners
   useEffect(() => {
-    if (!lecture) return;
+    if (!lecture || !lecture._id) {
+      return;
+    }
     
     const fetchQuestions = async () => {
       try {
-        // Mock questions for demo
-        const mockQuestions = [
-          { 
-            id: 1, 
-            text: 'What is React?', 
-            user: 'Student1', 
-            userId: '1',
-            answered: false, 
-            important: false,
-            timestamp: new Date().toISOString()
-          },
-          { 
-            id: 2, 
-            text: 'Explain JSX', 
-            user: 'Student2', 
-            userId: '2',
-            answered: true, 
-            important: true,
-            timestamp: new Date().toISOString()
-          },
-        ];
-        
-        setQuestions(mockQuestions);
+        // Fetch questions from backend API
+        const response = await questionsApi.getQuestionsByLecture(lecture._id);
+        // The backend returns the array directly, not wrapped in a data property
+        const mappedQuestions = (response || []).map(q => ({
+          ...q,
+          id: q._id || q.id,
+          text: q.content, // Map 'content' to 'text'
+          user: q.askedBy?.name || 'Anonymous', // Map populated user name
+          userId: q.askedBy?._id || q.askedBy,
+          answered: q.status === 'answered',
+          important: q.isImportant
+        }));
+        setQuestions(mappedQuestions);
         setParticipants(Math.floor(Math.random() * 50) + 1);
         setLoading(false);
         
         // Set up WebSocket listeners in a real app
-        if (socket) {
-          // Example: socket.emit('join-lecture', { lectureId, userId: user?.id });
+        if (socket && isConnected) {
+          console.log('Setting up socket listeners for lecture:', lecture._id);
+          
+          // Join lecture room
+          socket.emit('joinLecture', { lectureId: lecture._id, userId: user?.id });
+          
           socket.on('newQuestion', (newQuestion) => {
-            setQuestions(prev => [...prev, newQuestion]);
+            console.log('Received new question:', newQuestion);
+            // Map backend question fields to frontend expected fields
+            const mappedQuestion = {
+              ...newQuestion,
+              id: newQuestion._id || newQuestion.id,
+              text: newQuestion.content, // Map 'content' to 'text'
+              user: newQuestion.askedBy?.name || 'Anonymous', // Map populated user name
+              userId: newQuestion.askedBy?._id || newQuestion.askedBy,
+              answered: newQuestion.status === 'answered',
+              important: newQuestion.isImportant
+            };
+            setQuestions(prev => [...prev, mappedQuestion]);
           });
           
           socket.on('questionUpdated', (updatedQuestion) => {
+            console.log('Received question update:', updatedQuestion);
+            // Map backend question fields to frontend expected fields
+            const mappedQuestion = {
+              ...updatedQuestion,
+              id: updatedQuestion._id || updatedQuestion.id,
+              text: updatedQuestion.content, // Map 'content' to 'text'
+              user: updatedQuestion.askedBy?.name || 'Anonymous', // Map populated user name
+              userId: updatedQuestion.askedBy?._id || updatedQuestion.askedBy,
+              answered: updatedQuestion.status === 'answered',
+              important: updatedQuestion.isImportant
+            };
             setQuestions(prev => 
-              prev.map(q => q.id === updatedQuestion.id ? updatedQuestion : q)
+              prev.map(q => q.id === mappedQuestion.id ? mappedQuestion : q)
             );
           });
+          
+          socket.on('participantCount', (count) => {
+            console.log('Participant count updated:', count);
+            setParticipants(count);
+          });
+        } else {
+          console.warn('Socket not connected, cannot set up listeners');
         }
       } catch (err) {
         setError('Failed to load questions');
@@ -197,16 +269,18 @@ export default function LecturePage() {
 
     return () => {
       // Cleanup WebSocket listeners
-      if (socket) {
+      if (socket && isConnected) {
+        console.log('Cleaning up socket listeners');
         socket.off('newQuestion');
         socket.off('questionUpdated');
+        socket.off('participantCount');
+        socket.emit('leaveLecture', { lectureId: lecture._id });
       }
     };
-  }, [lecture, socket, user?.id]);
+  }, [lecture, socket, isConnected, user?.id]);
   
   // Handle loading state
   if (loading) {
-    console.log('Rendering loading state');
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -296,7 +370,7 @@ export default function LecturePage() {
         </div>
 
         {/* Teacher Controls (only visible to teachers and not in past lectures) */}
-        {(user?.role === 'teacher' || user?.role === 'ta') && !isPastLecture && (
+        {(user?.role === 'instructor' || user?.role === 'ta') && !isPastLecture && (
           <div className="mt-6">
             <TeacherControls 
               questions={questions}
