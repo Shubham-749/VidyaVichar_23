@@ -99,22 +99,34 @@ export default function LecturePage() {
         // Use socket instead of API call
         if (socket && isConnected) {
           console.log('Emitting askQuestion via socket:', { lectureId: lecture._id, content: question.text });
-          socket.emit('askQuestion', {
-            lectureId: lecture._id,
-            content: question.text
-          });
-
+          
+          // Create a temporary ID for this question
+          const tempId = `temp-${Date.now()}`;
+          
+          // Get user name with proper fallback
+          const storedUser = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
+          const userName = user?.name || storedUser?.name || 'Anonymous';
+          const userId = user?.id || storedUser?.id || null;
+          
           // Optimistically add the question to local state
           const newQuestion = {
             ...question,
-            id: `temp-${Date.now()}`, // Temporary ID until server responds
+            id: tempId, // Temporary ID until server responds
+            tempId: tempId, // Store tempId for server reference
             answered: false,
             important: false,
-            user: user?.name || 'Anonymous',
-            userId: user?.id,
+            user: userName,
+            userId: userId,
             timestamp: new Date().toISOString()
           };
           setQuestions(prev => [...prev, newQuestion]);
+          
+          // Emit with tempId so server can identify and replace it
+          socket.emit('askQuestion', { 
+            lectureId: lecture._id, 
+            content: question.text,
+            tempId: tempId
+          });
         } else {
           console.warn('Socket not connected, cannot ask question');
           alert('Not connected to the server. Please check your connection and try again.');
@@ -231,7 +243,25 @@ export default function LecturePage() {
               answered: newQuestion.status === 'answered',
               important: newQuestion.isImportant
             };
-            setQuestions(prev => [...prev, mappedQuestion]);
+            
+            // Check if this question was already optimistically added (by matching content and user)
+            setQuestions(prev => {
+              const existingTempIndex = prev.findIndex(q => 
+                (q.id?.toString().startsWith('temp-') || q.id === newQuestion.tempId) &&
+                q.text === newQuestion.content &&
+                q.userId === (newQuestion.askedBy?._id || newQuestion.askedBy)
+              );
+              
+              if (existingTempIndex !== -1) {
+                // Replace the temporary question with the real one
+                const updatedQuestions = [...prev];
+                updatedQuestions[existingTempIndex] = mappedQuestion;
+                return updatedQuestions;
+              } else {
+                // Add new question (from other users)
+                return [...prev, mappedQuestion];
+              }
+            });
           });
 
           socket.on('questionUpdated', (updatedQuestion) => {

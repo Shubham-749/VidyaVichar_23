@@ -10,6 +10,32 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
   const [dragItem, setDragItem] = useState(null);
   const boardRef = useRef(null);
   const boardRect = useRef({});
+  
+  // Generate random pastel colors for sticky notes
+  const getRandomStickyColor = (questionId) => {
+    const colors = [
+      'bg-pink-100', 'bg-blue-100', 'bg-green-100', 'bg-yellow-100', 
+      'bg-purple-100', 'bg-indigo-100', 'bg-orange-100', 'bg-teal-100',
+      'bg-cyan-100', 'bg-lime-100', 'bg-amber-100', 'bg-emerald-100'
+    ];
+    
+    // Use question ID to generate consistent color for the same question
+    const hash = questionId.toString().split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  };
+  
+  // Get sticky note color based on question importance
+  const getStickyNoteColor = (question) => {
+    if (question.important) {
+      return 'bg-red-100 border-l-4 border-red-400';
+    }
+    return getRandomStickyColor(question.id);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -285,7 +311,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                 return (
                   <div
                     key={q.id || index}
-                    className={`absolute p-4 rounded-lg shadow-md ${q.important ? 'bg-yellow-50 border-l-4 border-yellow-400' : 'bg-white'} ${q.answered ? 'opacity-75' : ''}`}
+                    className={`absolute p-4 rounded-lg shadow-md ${getStickyNoteColor(q)} ${q.answered ? 'opacity-75' : ''}`}
                     style={{
                       left: `${position.x}%`,
                       top: `${position.y}%`,
@@ -297,6 +323,7 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
                       maxHeight: '300px',
                       overflow: 'hidden',
                       transition: 'all 0.3s ease',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
                     }}
                     onMouseDown={(e) => handleMouseDown(e, q)}
                     onContextMenu={(e) => handleContextMenu(e, q)}

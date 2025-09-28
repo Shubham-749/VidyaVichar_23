@@ -13,23 +13,40 @@ export function AuthProvider({ children }) {
   const checkAuth = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
+      const storedUser = localStorage.getItem('user');
+      
+      // First, try to load user from localStorage for immediate availability
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser);
+        } catch (error) {
+          console.error('Failed to parse stored user:', error);
+          localStorage.removeItem('user');
+        }
+      } else {
+      }
+      
       if (!token) {
         setLoading(false);
         return;
       }
 
+      // Then verify with server
       const response = await authApi.getMe();
       if (response.user) {
-        setUser({
+        const serverUser = {
           id: response.user.id,
           name: response.user.name,
           email: response.user.email,
           role: response.user.role
-        });
+        };
+        setUser(serverUser);
+        localStorage.setItem('user', JSON.stringify(serverUser));
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      // Clear invalid token
+      // Clear invalid token but keep user from localStorage if API fails
       localStorage.removeItem('token');
     } finally {
       setLoading(false);

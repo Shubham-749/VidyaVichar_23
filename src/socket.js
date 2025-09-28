@@ -36,7 +36,8 @@ export function initSocket(server) {
         )
           return socket.emit("error", "Not enrolled in course");
         socket.join(`lecture:${lectureId}`);
-        const questions = await Question.find({ lecture: lectureId });
+        const questions = await Question.find({ lecture: lectureId })
+          .populate('askedBy', 'name');
         
         // Get participant count
         const participants = io.sockets.adapter.rooms.get(`lecture:${lectureId}`)?.size || 0;
@@ -80,6 +81,10 @@ export function initSocket(server) {
           askedBy: socket.user.id,
           content,
         });
+        
+        // Populate the user data before emitting
+        await q.populate('askedBy', 'name');
+        
         io.to(`lecture:${lectureId}`).emit("newQuestion", q);
       } catch (e) {
         console.error(e);
@@ -100,6 +105,10 @@ export function initSocket(server) {
           return socket.emit("error", "Not instructor");
         q.isImportant = isImportant;
         await q.save();
+        
+        // Populate the user data before emitting
+        await q.populate('askedBy', 'name');
+        
         io.to(`lecture:${lecture._id}`).emit("questionUpdated", q);
       } catch (e) {
         console.error(e);
@@ -120,6 +129,10 @@ export function initSocket(server) {
           return socket.emit("error", "Not instructor");
         q.status = status;
         await q.save();
+        
+        // Populate the user data before emitting
+        await q.populate('askedBy', 'name');
+        
         io.to(`lecture:${lecture._id}`).emit("questionUpdated", q);
       } catch (e) {
         console.error(e);
@@ -143,6 +156,10 @@ export function initSocket(server) {
         if (updates.isImportant !== undefined) q.isImportant = updates.isImportant;
         
         await q.save();
+        
+        // Populate the user data before emitting
+        await q.populate('askedBy', 'name');
+        
         io.to(`lecture:${lecture._id}`).emit("questionUpdated", q);
       } catch (e) {
         console.error(e);

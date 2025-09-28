@@ -10,7 +10,7 @@ export const register = async (req, res) => {
     const user = new User({ name, email, role });
     await user.setPassword(password);
     await user.save();
-    const token = signJwt({ id: user._id, email: user.email, role: user.role });
+    const token = signJwt({ id: user._id, name: user.name, email: user.email, role: user.role });
     res.cookie("token", token, { httpOnly: true});
     res.status(201).json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
   } catch (e) {
@@ -26,7 +26,7 @@ export const login = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
     if (!await user.validatePassword(password)) return res.status(401).json({ message: "Invalid credentials" });
-    const token = signJwt({ id: user._id, email: user.email, role: user.role });
+    const token = signJwt({ id: user._id, name: user.name, email: user.email, role: user.role });
     res.cookie("token", token, { httpOnly: true});
     res.json({ token, user: { id: user._id, name: user.name, email: user.email, role: user.role } });
   } catch (e) {
@@ -40,10 +40,20 @@ export const logout = (req, res) => {
   res.json({ message: "Logged out" });
 };
 
-export const checkAuth = (req, res) => {
+export const checkAuth = async (req, res) => {
   const token = req.cookies.token;
   if (!token) return res.status(401).json({ message: "Unauthorized" });
   const payload = verifyJwt(token);
   if (!payload) return res.status(401).json({ message: "Unauthorized" });
-  res.json({ user: { id: payload.id, email: payload.email, role: payload.role } });
+  
+  try {
+    // Fetch user from database to get all fields including name
+    const user = await User.findById(payload.id).select('-password');
+    if (!user) return res.status(401).json({ message: "User not found" });
+    
+    res.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role } });
+  } catch (error) {
+    console.error('Error fetching user in checkAuth:', error);
+    return res.status(500).json({ message: "Server error" });
+  }
 }
