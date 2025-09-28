@@ -26,7 +26,7 @@ export default function LectureCard({
   showCourse = false,
   className = ''
 }) {
-  const { name, status, startTime, endTime, courseName } = lecture;
+  const { title, status, startTime, endTime, courseName } = lecture;
   const config = statusConfig[status] || statusConfig.upcoming;
   
   const formatTime = (time) => {
@@ -59,7 +59,7 @@ export default function LectureCard({
         <div className="flex justify-between items-start">
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-              {name}
+              {title}
             </h3>
             
             {showCourse && courseName && (

@@ -13,31 +13,17 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
+
     try {
-      // Simple validation
       if (!email || !password) {
         throw new Error('Please enter both email and password');
       }
 
-      // Mock login - replace with API call
-      let userRole = null;
-      if (email === 'teacher@vidya.com') {
-        userRole = 'teacher';
-      } else if (email === 'student@vidya.com') {
-        userRole = 'student';
-      } else if (email === 'ta@vidya.com') {
-        userRole = 'ta';
-      } else {
-        throw new Error('Invalid credentials. Please use teacher@vidya.com, student@vidya.com, or ta@vidya.com');
-      }
-      
-      // Call login and wait for it to complete
-      await login({ role: userRole, email });
-      
-      // Force a page reload to ensure the auth state is properly set
-      window.location.href = '/dashboard';
-      
+      await login({ email, password });
+
+      // Redirect to dashboard on successful login
+      navigate('/dashboard');
+
     } catch (err) {
       setError(err.message);
       console.error('Login error:', err);

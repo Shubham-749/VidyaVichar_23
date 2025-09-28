@@ -1,26 +1,30 @@
 import { useState, useEffect } from 'react';
+import { coursesApi } from '../api/courses';
 import { useAuth } from '../context/AuthContext';
 
 export function useCourses() {
   const { user } = useAuth();
   const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Mock data
-    const mockCourses = [
-      { id: 1, name: 'Mathematics', description: 'Algebra & Calculus' },
-      { id: 2, name: 'Physics', description: 'Mechanics & Optics' },
-      { id: 3, name: 'Computer Science', description: 'Data Structures' },
-    ];
+    const fetchCourses = async () => {
+      if (!user) return;
+      try {
+        setLoading(true);
+        const data = await coursesApi.getAllCourses();
+        setCourses(data);
+      } catch (err) {
+        setError(err);
+        console.error('Failed to fetch courses:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    if (user?.role === 'teacher') {
-      setCourses(mockCourses); // All courses as teacher
-    } else if (user?.role === 'student') {
-      setCourses(mockCourses.slice(0, 2)); // Only enrolled courses
-    } else if (user?.role === 'ta') {
-      setCourses(mockCourses.slice(1, 3)); // Assigned courses
-    }
+    fetchCourses();
   }, [user]);
 
-  return { courses };
+  return { courses, loading, error };
 }

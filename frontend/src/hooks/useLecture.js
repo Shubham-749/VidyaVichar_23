@@ -1,26 +1,46 @@
-import { useState, useEffect } from 'react';
-import { useAuth } from './useAuth';
+import { useState, useEffect, useCallback } from 'react';
+import { lecturesApi } from '../api/lectures';
+import { useAuth } from '../context/AuthContext';
 
 export function useLecture(courseId) {
   const { user } = useAuth();
   const [lectures, setLectures] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    // Mock lectures
-    const mockLectures = [
-      { id: 1, name: 'Lecture 1', status: 'completed' },
-      { id: 2, name: 'Lecture 2', status: 'live' },
-      { id: 3, name: 'Lecture 3', status: 'upcoming' },
-    ];
-
-    if (user?.role === 'teacher') {
-      setLectures(mockLectures); // Teacher sees all lectures
-    } else if (user?.role === 'student') {
-      setLectures(mockLectures.filter(l => l.status === 'live')); // Student sees only live
-    } else if (user?.role === 'ta') {
-      setLectures(mockLectures.filter(l => l.status === 'completed')); // TA sees completed
+  const fetchLectures = useCallback(async () => {
+    if (!courseId || !user) return;
+    try {
+      setLoading(true);
+      const data = await lecturesApi.getLecturesByCourse(courseId);
+      
+      const now = new Date();
+      const lecturesWithStatus = data.map(lecture => {
+        const start = new Date(lecture.startTime);
+        const end = new Date(lecture.endTime);
+        let status = 'upcoming';
+        
+        if (now >= start && now <= end) {
+          status = 'live';
+        } else if (now > end) {
+          status = 'completed';
+        }
+        
+        return { ...lecture, status };
+      });
+      
+      setLectures(lecturesWithStatus);
+    } catch (err) {
+      setError(err);
+      console.error('Failed to fetch lectures:', err);
+    } finally {
+      setLoading(false);
     }
   }, [courseId, user]);
 
-  return { lectures };
+  useEffect(() => {
+    fetchLectures();
+  }, [fetchLectures]);
+
+  return { lectures, loading, error, refetch: fetchLectures };
 }

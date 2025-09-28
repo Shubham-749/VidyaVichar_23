@@ -5,6 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import { FiArrowLeft, FiUsers, FiVideo, FiMic, FiPhoneOff } from 'react-icons/fi';
 import Whiteboard from '../components/Whiteboard';
 import TeacherControls from '../components/TeacherControls';
+import { questionsApi } from '../api/questions';
 
 export default function LecturePage() {
   const { id: lectureId } = useParams();
@@ -45,9 +46,8 @@ export default function LecturePage() {
   // Initialize lecture data
   useEffect(() => {
     if (state?.lecture) {
-      console.log('Using lecture data from navigation state:', state.lecture);
       // If this is a past lecture and user is not a teacher/TA, redirect back
-      if (state.lecture.status === 'completed' && !['teacher', 'ta'].includes(user?.role)) {
+      if (state.lecture.status === 'completed' && !['instructor', 'ta'].includes(user?.role)) {
         alert('This lecture has already ended.');
         navigate(-1);
         return;
@@ -59,23 +59,26 @@ export default function LecturePage() {
       });
       setLoading(false);
     } else {
-      console.log('No lecture data in navigation state, loading from ID:', lectureId);
+      if (!lectureId) {
+          setError('Invalid lecture ID');
+        setLoading(false);
+        return;
+      }
+      
       // Fallback mock data if no lecture is provided in state
       const mockLecture = {
-        id: lectureId,
-        name: `Lecture ${lectureId ? lectureId.split('lecture')[1] || '1' : '1'}`,
-        status: 'live',
+        _id: lectureId,
+        name: `Lecture ${lectureId.split('lecture')[1] || '1'}`,
         startTime: new Date().toISOString(),
         endTime: new Date(Date.now() + 3600000).toISOString(),
         courseId: '1',
         courseName: 'Course 1',
         isPast: false
-      };
-      console.log('Using mock lecture data:', mockLecture);
+      }
       setLecture(mockLecture);
       setLoading(false);
     }
-  }, [state, lectureId]);
+  }, [state, lectureId, user, navigate]);
 
   // Handle question actions
   const handleQuestionAction = useCallback((action, question) => {
@@ -86,35 +89,101 @@ export default function LecturePage() {
     }
     switch (action) {
       case 'add':
-        const newQuestion = {
-          ...question,
-          id: Date.now()
+        if (!lecture || !lecture._id) {
+          alert('Cannot add question: Lecture data is not available. Please refresh the page.');
+          return;
+        }
+        const lectureId = lecture._id; // Capture lecture ID at this moment
+        const addQuestionToBackend = async () => {
+          try {
+            const response = await questionsApi.askQuestion(lectureId, question.text);
+            
+            // Safety check for undefined response
+            if (!response) {
+              throw new Error('API returned undefined response');
+            }
+            
+            // The backend returns the question object directly, not wrapped in data
+            const questionData = response;
+            
+            // Safety check for question data
+            if (!questionData || !questionData._id) {
+              throw new Error('Invalid question data received from server');
+            }
+            
+            const newQuestion = {
+              ...questionData,
+              id: questionData._id || questionData.id,
+              text: questionData.content, // Map 'content' to 'text' for frontend compatibility
+              answered: questionData.status === 'answered',
+              important: questionData.isImportant
+            };
+            setQuestions(prev => [...prev, newQuestion]);
+          } catch (error) {
+            console.error('Error adding question:', error);
+            
+            // Check if it's a network error or axios configuration error
+            if (error.code === 'ERR_NETWORK' || !error.response) {
+              console.error('Network or configuration error:', error.message);
+              alert('Network error: Unable to connect to the server. Please check if the backend is running.');
+            } else {
+              console.error('Error response:', error.response?.data);
+              console.error('Error status:', error.response?.status);
+              
+              let errorMessage = 'Failed to add question';
+              if (error.response?.data?.message) {
+                errorMessage += `: ${error.response.data.message}`;
+                if (error.response.data.details) {
+                  errorMessage += ` (${JSON.stringify(error.response.data.details)})`;
+                }
+              } else if (error.message) {
+                errorMessage += `: ${error.message}`;
+              }
+              
+              alert(errorMessage);
+            }
+            
+            // Fallback to local state if API fails
+            const newQuestion = {
+              ...question,
+              id: Date.now(),
+              answered: false,
+              important: false
+            };
+            setQuestions(prev => [...prev, newQuestion]);
+          }
         };
-        setQuestions(prev => [...prev, newQuestion]);
+        addQuestionToBackend();
         break;
         
       case 'toggleImportant':
-        setQuestions(prev => 
-          prev.map(q => 
-            q.id === question.id ? { ...q, important: !q.important } : q
-          ));
-        // Emit to WebSocket in a real app
-        if (socket) {
-          const updatedQuestion = { ...question, important: !question.important };
-          socket.emit('updateQuestion', updatedQuestion);
-        }
+        const toggleImportantInBackend = async () => {
+          try {
+            await questionsApi.toggleImportant(question.id, !question.important);
+            setQuestions(prev => 
+              prev.map(q => 
+                q.id === question.id ? { ...q, important: !q.important } : q
+              ));
+          } catch (error) {
+            console.error('Error toggling important:', error);
+          }
+        };
+        toggleImportantInBackend();
         break;
         
       case 'toggleAnswered':
-        setQuestions(prev => 
-          prev.map(q => 
-            q.id === question.id ? { ...q, answered: !q.answered } : q
-          ));
-        // Emit to WebSocket in a real app
-        if (socket) {
-          const updatedQuestion = { ...question, answered: !question.answered };
-          socket.emit('updateQuestion', updatedQuestion);
-        }
+        const toggleAnsweredInBackend = async () => {
+          try {
+            await questionsApi.updateQuestionStatus(question.id, !question.answered ? 'answered' : 'unanswered');
+            setQuestions(prev => 
+              prev.map(q => 
+                q.id === question.id ? { ...q, answered: !q.answered } : q
+              ));
+          } catch (error) {
+            console.error('Error toggling answered:', error);
+          }
+        };
+        toggleAnsweredInBackend();
         break;
         
       case 'delete':
@@ -130,46 +199,37 @@ export default function LecturePage() {
           setQuestions([]);
           // Emit to WebSocket in a real app
           if (socket) {
-            socket.emit('clearQuestions', lecture.id);
+            socket.emit('clearQuestions', lecture._id);
           }
         }
         break;
         
       default:
-        console.warn(`Unknown action: ${action}`);
         break;
     }
   }, [socket, lecture]);
 
   // Fetch questions and set up socket listeners
   useEffect(() => {
-    if (!lecture) return;
+    if (!lecture || !lecture._id) {
+      return;
+    }
     
     const fetchQuestions = async () => {
       try {
-        // Mock questions for demo
-        const mockQuestions = [
-          { 
-            id: 1, 
-            text: 'What is React?', 
-            user: 'Student1', 
-            userId: '1',
-            answered: false, 
-            important: false,
-            timestamp: new Date().toISOString()
-          },
-          { 
-            id: 2, 
-            text: 'Explain JSX', 
-            user: 'Student2', 
-            userId: '2',
-            answered: true, 
-            important: true,
-            timestamp: new Date().toISOString()
-          },
-        ];
-        
-        setQuestions(mockQuestions);
+        // Fetch questions from backend API
+        const response = await questionsApi.getQuestionsByLecture(lecture._id);
+        // The backend returns the array directly, not wrapped in a data property
+        const mappedQuestions = (response || []).map(q => ({
+          ...q,
+          id: q._id || q.id,
+          text: q.content, // Map 'content' to 'text'
+          user: q.askedBy?.name || 'Anonymous', // Map populated user name
+          userId: q.askedBy?._id || q.askedBy,
+          answered: q.status === 'answered',
+          important: q.isImportant
+        }));
+        setQuestions(mappedQuestions);
         setParticipants(Math.floor(Math.random() * 50) + 1);
         setLoading(false);
         
@@ -177,12 +237,32 @@ export default function LecturePage() {
         if (socket) {
           // Example: socket.emit('join-lecture', { lectureId, userId: user?.id });
           socket.on('newQuestion', (newQuestion) => {
-            setQuestions(prev => [...prev, newQuestion]);
+            // Map backend question fields to frontend expected fields
+            const mappedQuestion = {
+              ...newQuestion,
+              id: newQuestion._id || newQuestion.id,
+              text: newQuestion.content, // Map 'content' to 'text'
+              user: newQuestion.askedBy?.name || 'Anonymous', // Map populated user name
+              userId: newQuestion.askedBy?._id || newQuestion.askedBy,
+              answered: newQuestion.status === 'answered',
+              important: newQuestion.isImportant
+            };
+            setQuestions(prev => [...prev, mappedQuestion]);
           });
           
           socket.on('questionUpdated', (updatedQuestion) => {
+            // Map backend question fields to frontend expected fields
+            const mappedQuestion = {
+              ...updatedQuestion,
+              id: updatedQuestion._id || updatedQuestion.id,
+              text: updatedQuestion.content, // Map 'content' to 'text'
+              user: updatedQuestion.askedBy?.name || 'Anonymous', // Map populated user name
+              userId: updatedQuestion.askedBy?._id || updatedQuestion.askedBy,
+              answered: updatedQuestion.status === 'answered',
+              important: updatedQuestion.isImportant
+            };
             setQuestions(prev => 
-              prev.map(q => q.id === updatedQuestion.id ? updatedQuestion : q)
+              prev.map(q => q.id === mappedQuestion.id ? mappedQuestion : q)
             );
           });
         }
@@ -206,7 +286,6 @@ export default function LecturePage() {
   
   // Handle loading state
   if (loading) {
-    console.log('Rendering loading state');
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -296,7 +375,7 @@ export default function LecturePage() {
         </div>
 
         {/* Teacher Controls (only visible to teachers and not in past lectures) */}
-        {(user?.role === 'teacher' || user?.role === 'ta') && !isPastLecture && (
+        {(user?.role === 'instructor' || user?.role === 'ta') && !isPastLecture && (
           <div className="mt-6">
             <TeacherControls 
               questions={questions}
