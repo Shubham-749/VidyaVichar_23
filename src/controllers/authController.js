@@ -1,5 +1,5 @@
 import User from "../models/User.js";
-import { signJwt } from "../utils/auth.js";
+import { signJwt, verifyJwt } from "../utils/auth.js";
 
 export const register = async (req, res) => {
   try {

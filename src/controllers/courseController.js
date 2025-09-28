@@ -17,7 +17,12 @@ export const createCourse = async (req, res) => {
 };
 
 export const listCourses = async (req, res) => {
-  const courses = await Course.find();
+  let courses = null;
+  if(req.user.role === "admin"){
+    courses = await Course.find();
+  }else{
+    courses = await Course.find({ $or: [ { instructorId: req.user._id }, { students: req.user._id } ] });
+  }
   res.json(courses);
 };
 
