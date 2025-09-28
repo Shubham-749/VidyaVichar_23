@@ -5,6 +5,7 @@ import { useSocket } from '../context/SocketContext';
 import { FiArrowLeft, FiUsers, FiVideo, FiMic, FiPhoneOff } from 'react-icons/fi';
 import Whiteboard from '../components/Whiteboard';
 import TeacherControls from '../components/TeacherControls';
+import StudentControls from '../components/StudentControls';
 import { questionsApi } from '../api/questions';
 
 export default function LecturePage() {
@@ -20,22 +21,6 @@ export default function LecturePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
-
-  // Handle updating a question
-  const handleUpdateQuestion = useCallback((questionId, updates) => {
-    setQuestions(prevQuestions =>
-      prevQuestions.map(q =>
-        q.id === questionId ? { ...q, ...updates } : q
-      )
-    );
-
-    // Emit update to socket if connected
-    if (socket && isConnected) {
-      socket.emit('updateQuestion', { questionId, updates });
-    } else {
-      console.warn('Socket not connected, cannot emit update');
-    }
-  }, [socket]);
 
   // Calculate filtered questions
   const filteredQuestions = questions.filter(q => {
@@ -160,7 +145,7 @@ export default function LecturePage() {
         if (socket && isConnected) {
           socket.emit('updateQuestionStatus', {
             questionId: question.id,
-            status: !question.answered ? 'answered' : 'unanswered'
+            status: !question.answered ? 'answered' : 'open'
           });
           // Optimistically update UI
           setQuestions(prev =>
@@ -184,14 +169,12 @@ export default function LecturePage() {
         break;
 
       case 'clear-all':
-        if (window.confirm('Are you sure you want to delete all questions?')) {
-          if (socket && isConnected) {
-            socket.emit('clearQuestions', lecture._id);
-            // Optimistically update UI
-            setQuestions([]);
-          } else {
-            console.warn('Socket not connected, cannot clear questions');
-          }
+        if (socket && isConnected) {
+          socket.emit('clearQuestions', lecture._id);
+          // Optimistically update UI
+          setQuestions([]);
+        } else {
+          console.warn('Socket not connected, cannot clear questions');
         }
         break;
 
@@ -404,8 +387,18 @@ export default function LecturePage() {
           <div className="mt-6">
             <TeacherControls
               questions={questions}
-              onUpdateQuestion={handleUpdateQuestion}
               onQuestionAction={handleQuestionAction}
+              activeFilter={activeFilter}
+              onFilterChange={setActiveFilter}
+            />
+          </div>
+        )}
+        
+        {/* Student Controls (only visible to students and not in past lectures) */}
+        {user?.role === 'student' && !isPastLecture && (
+          <div className="mt-6">
+            <StudentControls
+              questions={questions}
               activeFilter={activeFilter}
               onFilterChange={setActiveFilter}
             />

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FiMessageSquare, FiX, FiCheck, FiStar, FiTrash2, FiMoreVertical } from 'react-icons/fi';
+import { FiMessageSquare, FiX, FiCheck, FiStar, FiMoreVertical } from 'react-icons/fi';
 
 const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) => {
   const [newQuestion, setNewQuestion] = useState('');
@@ -134,28 +134,17 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
     }
   }, [questions.length]); // Only run when number of questions changes
 
-  // Use questions directly since filtering is handled by the parent component
-  const filteredQuestions = questions;
-
+  //
   // Check if user is a teacher/TA in a past lecture
   const isTeacherInPastLecture = user.role === 'viewer' || user.role === 'instructor' || user.role === 'ta';
   
   // Handle mark all as answered
   const handleMarkAllAnswered = () => {
-    filteredQuestions.forEach(q => {
+    questions.forEach(q => {
       if (!q.answered) {
         onQuestionAction('toggleAnswered', q);
       }
     });
-  };
-
-  // Handle clear all questions
-  const handleClearAll = () => {
-    if (window.confirm('Are you sure you want to clear all questions?')) {
-      filteredQuestions.forEach(q => {
-        onQuestionAction('delete', q);
-      });
-    }
   };
 
   const handleMouseDown = (e, question) => {
@@ -255,14 +244,6 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
               <FiCheck className="mr-1.5" />
               <span>Mark All Answered</span>
             </button>
-            <button
-              onClick={handleClearAll}
-              className="flex items-center px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
-              title="Clear all questions"
-            >
-              <FiTrash2 className="mr-1.5" />
-              <span>Clear All</span>
-            </button>
           </div>
         )}
       </div>
@@ -295,14 +276,14 @@ const Whiteboard = ({ user, questions = [], onQuestionAction, onAddQuestion }) =
 
         {/* Questions grid */}
         <div className="flex-1 p-4 overflow-auto" style={{ marginTop: '0' }}>
-          {filteredQuestions.length === 0 ? (
+          {questions.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
               <FiMessageSquare className="w-12 h-12 mb-4 opacity-30" />
               <p>No questions yet. Be the first to ask!</p>
             </div>
           ) : (
             <div className="relative w-full h-full overflow-hidden" style={{ minHeight: '400px', position: 'relative' }}>
-              {filteredQuestions.map((q, index) => {
+              {questions.map((q, index) => {
                 const position = positions[q.id] || {
                   x: 20 + Math.random() * 60,
                   y: 20 + Math.random() * 60

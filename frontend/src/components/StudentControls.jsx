@@ -1,19 +1,11 @@
 import React from 'react';
-import { FiFilter, FiX, FiStar, FiMessageSquare } from 'react-icons/fi';
+import { FiFilter, FiMessageSquare, FiStar } from 'react-icons/fi';
 
-export default function TeacherControls({ 
+export default function StudentControls({ 
   questions = [], 
-  onQuestionAction,
   activeFilter,
   onFilterChange 
 }) {
-  const clearAll = () => {
-    if (window.confirm('Are you sure you want to delete all questions?')) {
-      // Use onQuestionAction with 'clear-all' action to clear all questions
-      onQuestionAction('clear-all');
-    }
-  };
-
   const FILTERS = [
     { id: 'all', label: 'All', icon: <FiMessageSquare className="mr-2" /> },
     { id: 'unanswered', label: 'Unanswered', icon: <FiMessageSquare className="mr-2" /> },
@@ -40,31 +32,30 @@ export default function TeacherControls({
               >
                 {filter.icon}
                 {filter.label}
-                {activeFilter === filter.id && (
-                  <span className="ml-1.5 py-0.5 px-1.5 rounded-full bg-blue-100 text-blue-600 text-xs">
-                    {questions.filter(q => {
-                      if (filter.id === 'all') return true;
-                      if (filter.id === 'unanswered') return !q.answered;
-                      if (filter.id === 'important') return q.important;
-                      return true;
-                    }).length}
-                  </span>
-                )}
+                <span className="ml-2 text-xs bg-gray-100 px-2 py-1 rounded-full">
+                  {questions.filter(q => {
+                    if (filter.id === 'all') return true;
+                    if (filter.id === 'unanswered') return !q.answered;
+                    if (filter.id === 'important') return q.important;
+                    return true;
+                  }).length}
+                </span>
               </button>
             ))}
           </nav>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-2 pt-2">
-        <button
-          onClick={clearAll}
-          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-        >
-          <FiX className="mr-2" />
-          Clear All
-        </button>
+      {/* Filter Info */}
+      <div className="text-sm text-gray-600">
+        <p>
+          Showing {questions.filter(q => {
+            if (activeFilter === 'all') return true;
+            if (activeFilter === 'unanswered') return !q.answered;
+            if (activeFilter === 'important') return q.important;
+            return true;
+          }).length} of {questions.length} questions
+        </p>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ const AppWrapper = () => {
     // Extract lectureId from URL path
     const pathParts = location.pathname.split('/');
     const lectureIndex = pathParts.indexOf('lectures');
-    
+
     if (lectureIndex !== -1 && pathParts[lectureIndex + 1]) {
       setLectureId(pathParts[lectureIndex + 1]);
     } else {
@@ -31,11 +31,9 @@ const AppWrapper = () => {
 };
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <AppWrapper />
-      </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+  <BrowserRouter>
+    <AuthProvider>
+      <AppWrapper />
+    </AuthProvider>
+  </BrowserRouter>
 );
